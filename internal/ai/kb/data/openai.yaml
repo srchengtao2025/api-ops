@@ -1,0 +1,71 @@
+# OpenAI 错误码知识库
+- code: rate_limit_exceeded
+  http_status: 429
+  category: rate_limit
+  severity: warning
+  root_causes:
+    - 超出组织 / 项目 RPM / TPM 限制
+    - 触发了 tier 配额
+  patterns:
+    - "rate_limit_exceeded"
+    - "Rate limit reached"
+    - "TPM"
+    - "RPM"
+  actions:
+    - 客户端指数退避
+    - 申请提升 org 配额
+    - 多 org 轮询
+  doc_url: https://platform.openai.com/docs/guides/error-codes/api-errors
+
+- code: invalid_request_error
+  http_status: 400
+  category: client
+  severity: info
+  root_causes:
+    - 请求参数非法（model / messages / tools 格式错）
+    - prompt 超过 context window
+    - tool_calls 引用不存在的 function
+  patterns:
+    - "invalid_request_error"
+    - "context_length_exceeded"
+    - "Invalid value"
+  actions:
+    - 检查 messages 格式
+    - 缩短 prompt 或换长上下文模型
+    - 校验 tool definitions
+  doc_url: https://platform.openai.com/docs/guides/error-codes/api-errors
+
+- code: insufficient_quota
+  http_status: 429
+  category: billing
+  severity: critical
+  root_causes:
+    - 账号余额不足
+    - 预付费额度耗尽
+  patterns:
+    - "insufficient_quota"
+    - "You exceeded your current quota"
+    - "billing"
+  actions:
+    - 立即充值
+    - 检查 Billing > Usage limits
+    - 暂停非核心业务
+  doc_url: https://platform.openai.com/docs/guides/error-codes/api-errors
+
+- code: server_error
+  http_status: 500
+  category: server
+  severity: high
+  root_causes:
+    - OpenAI 服务端故障
+    - 模型推理集群异常
+  patterns:
+    - "server_error"
+    - "Internal server error"
+    - "Service Unavailable"
+    - "5xx"
+  actions:
+    - 立即重试 1-3 次
+    - 切换备用 channel
+    - 关注 status.openai.com
+  doc_url: https://platform.openai.com/docs/guides/error-codes/api-errors

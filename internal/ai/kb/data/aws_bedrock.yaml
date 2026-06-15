@@ -1,0 +1,72 @@
+# AWS Bedrock 错误码知识库
+# 字段：code / http_status / category / patterns / root_causes / actions / doc_url
+# 同步脚本：internal/ai/kb/loader.go 启动时 upsert 到 error_kb_entries
+- code: ThrottlingException
+  http_status: 429
+  category: rate_limit
+  severity: warning
+  root_causes:
+    - 请求频率超过 AWS Bedrock 配额（默认 100 RPM / 模型）
+    - 多租户共享 AWS 账号触发全局 throttle
+  patterns:
+    - "Too many requests"
+    - "rate exceeded"
+    - "ThrottlingException"
+  actions:
+    - 客户端实现指数退避（建议 1s/2s/4s）
+    - 联系 AWS 提升模型配额
+    - 切换到次选 channel
+  doc_url: https://docs.aws.amazon.com/bedrock/latest/userguide/troubleshooting-api-error-codes.html
+
+- code: ValidationException
+  http_status: 400
+  category: client
+  severity: info
+  root_causes:
+    - 请求参数不符合模型约束（max_tokens / temperature / top_p 越界）
+    - prompt 超长超过模型 max_input_tokens
+  patterns:
+    - "ValidationException"
+    - "invalid parameter"
+    - "max tokens"
+    - "max_input_tokens"
+  actions:
+    - 检查请求参数范围
+    - 缩短 prompt 或分段调用
+    - 调小 max_tokens 至模型上限
+  doc_url: https://docs.aws.amazon.com/bedrock/latest/userguide/troubleshooting-api-error-codes.html
+
+- code: AccessDeniedException
+  http_status: 403
+  category: auth
+  severity: high
+  root_causes:
+    - AWS 账号未开通对应模型访问权限（Bedrock > Model access）
+    - IAM role 缺少 bedrock:InvokeModel 权限
+  patterns:
+    - "AccessDenied"
+    - "not authorized"
+    - "model access"
+    - "User does not have access"
+  actions:
+    - AWS Console 申请模型访问（通常几分钟批准）
+    - 检查 IAM policy 是否含 bedrock:InvokeModel
+    - 等待 IAM 策略传播（最多几秒）
+  doc_url: https://docs.aws.amazon.com/bedrock/latest/userguide/model-access.html
+
+- code: ModelStreamErrorException
+  http_status: 500
+  category: server
+  severity: high
+  root_causes:
+    - 模型推理过程中服务端异常
+    - 底层 EC2/GPU 临时故障
+  patterns:
+    - "ModelStreamError"
+    - "ModelInvocationException"
+    - "internal failure"
+  actions:
+    - 立即重试 1-3 次（带退避）
+    - 切换备用 region 或 channel
+    - 关注 AWS Health Dashboard
+  doc_url: https://docs.aws.amazon.com/bedrock/latest/userguide/troubleshooting-api-error-codes.html

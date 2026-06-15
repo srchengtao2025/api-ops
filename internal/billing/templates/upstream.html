@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>upstream 上游对账单 - {{.VendorName}} - {{.PeriodStr}}</title>
+<style>
+  body { font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; max-width: 960px; margin: 24px auto; padding: 0 16px; color: #1f1f1f; }
+  h1 { color: #1f1f1f; border-bottom: 2px solid #1677ff; padding-bottom: 8px; }
+  h2 { color: #1677ff; margin-top: 32px; border-left: 4px solid #1677ff; padding-left: 12px; }
+  table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 14px; }
+  th { background: #fafafa; padding: 10px 12px; text-align: left; border-bottom: 1px solid #e0e0e0; font-weight: 600; }
+  td { padding: 8px 12px; border-bottom: 1px solid #f0f0f0; }
+  tr:hover td { background: #f5f9ff; }
+  .summary-card { background: linear-gradient(135deg, #f0f5ff, #fff7e6); border: 1px solid #d6e4ff; border-radius: 8px; padding: 16px 20px; margin: 16px 0; }
+  .summary-card dt { font-weight: 600; color: #555; }
+  .summary-card dd { margin-left: 0; margin-bottom: 8px; font-size: 18px; color: #1f1f1f; }
+  .total { font-weight: 600; background: #fff7e6; color: #CF1322; }
+  .footer { color: #999; font-size: 12px; margin-top: 32px; text-align: center; padding-top: 16px; border-top: 1px solid #f0f0f0; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 12px; margin-left: 8px; }
+  .badge-warn { background: #fff7e6; color: #d48806; border: 1px solid #ffe7ba; }
+  .unmatched { color: #d48806; font-size: 12px; }
+</style>
+</head>
+<body>
+
+<h1>upstream 上游对账单</h1>
+
+<dl class="summary-card">
+  <dt>上游 (vendor)</dt>
+  <dd>{{.VendorName}} <small>(code: {{.VendorCode}})</small>{{if .UnmatchedReason}} <span class="badge badge-warn">⚠️ {{.UnmatchedReason}}</span>{{end}}</dd>
+
+  <dt>周期</dt>
+  <dd>{{.PeriodStr}}</dd>
+
+  <dt>生成时间</dt>
+  <dd>{{.GeneratedAtRFC3339}}</dd>
+</dl>
+
+<h2>概览</h2>
+<dl class="summary-card">
+  <dt>总请求数</dt>     <dd>{{thousands .TotalRequestCount}} 次</dd>
+  <dt>客户消耗 (USD)</dt> <dd>${{thousandsFloat .TotalRevenue}}</dd>
+  <dt>累计成本 (USD)</dt> <dd>${{thousandsFloat .TotalCost}}</dd>
+  <dt>毛利 (USD)</dt>     <dd>${{thousandsFloat .TotalProfit}}</dd>
+  <dt>毛利率</dt>         <dd>{{pct .ProfitRate}} <small>(财务看"赚几倍")</small></dd>
+</dl>
+
+{{if .ByChannel}}
+<h2>按渠道拆分</h2>
+<table>
+  <thead>
+    <tr>
+      <th>渠道 ID</th>
+      <th>渠道名</th>
+      <th>调用次数</th>
+      <th>输入 tokens</th>
+      <th>输出 tokens</th>
+      <th>缓存 tokens</th>
+      <th>累计成本 (USD)</th>
+      <th>客户消耗 (USD)</th>
+    </tr>
+  </thead>
+  <tbody>
+    {{range .ByChannel}}
+    <tr>
+      <td>{{.ChannelID}}</td>
+      <td>{{.ChannelName}}</td>
+      <td>{{thousands .RequestCount}}</td>
+      <td>{{thousands .PromptTokens}}</td>
+      <td>{{thousands .CompletionTokens}}</td>
+      <td>{{thousands .CacheTokens}}</td>
+      <td>${{thousandsFloat .TotalCost}}</td>
+      <td>${{thousandsFloat .TotalRevenue}}</td>
+    </tr>
+    {{end}}
+  </tbody>
+</table>
+{{end}}
+
+{{if .ByModel}}
+<h2>按模型拆分</h2>
+<table>
+  <thead>
+    <tr>
+      <th>模型</th>
+      <th>调用次数</th>
+      <th>输入 tokens</th>
+      <th>输出 tokens</th>
+      <th>缓存 tokens</th>
+      <th>累计成本 (USD)</th>
+      <th>客户消耗 (USD)</th>
+    </tr>
+  </thead>
+  <tbody>
+    {{range .ByModel}}
+    <tr>
+      <td>{{.ModelName}}</td>
+      <td>{{thousands .RequestCount}}</td>
+      <td>{{thousands .PromptTokens}}</td>
+      <td>{{thousands .CompletionTokens}}</td>
+      <td>{{thousands .CacheTokens}}</td>
+      <td>${{thousandsFloat .TotalCost}}</td>
+      <td>${{thousandsFloat .TotalRevenue}}</td>
+    </tr>
+    {{end}}
+  </tbody>
+</table>
+{{end}}
+
+{{if .ByDate}}
+<h2>按天拆分</h2>
+<table>
+  <thead>
+    <tr>
+      <th>日期</th>
+      <th>调用次数</th>
+      <th>输入 tokens</th>
+      <th>输出 tokens</th>
+      <th>缓存 tokens</th>
+      <th>累计成本 (USD)</th>
+      <th>客户消耗 (USD)</th>
+    </tr>
+  </thead>
+  <tbody>
+    {{range .ByDate}}
+    <tr>
+      <td>{{.Date}}</td>
+      <td>{{thousands .RequestCount}}</td>
+      <td>{{thousands .PromptTokens}}</td>
+      <td>{{thousands .CompletionTokens}}</td>
+      <td>{{thousands .CacheTokens}}</td>
+      <td>${{thousandsFloat .TotalCost}}</td>
+      <td>${{thousandsFloat .TotalRevenue}}</td>
+    </tr>
+    {{end}}
+  </tbody>
+</table>
+{{end}}
+
+<div class="footer">
+  api-ops 自动生成 · BILLING v3 上游对账 ·
+  成本反推公式: cost = (revenue / group_ratio) × channel_discount ·
+  利润率 = (revenue - cost) / cost
+</div>
+
+</body>
+</html>

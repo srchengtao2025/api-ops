@@ -1,0 +1,96 @@
+# api-ops 生产环境 docker-compose
+# 适用：1-2G 内存的小机器，只跑核心 api + 支撑 PG/Redis
+# 与 dev 的 docker-compose.yml 区别：
+#   - 不跑 web 容器（前端另起或后续接 nginx）
+#   - 不自动 seed（SEED_ON_START=false 防止污染真实数据）
+#   - 显式资源限制，避免 OOM
+#
+# 用法：
+#   cp .env.production.example .env && 编辑 .env
+#   docker compose -f docker-compose.prod.yml up -d
+#
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: api-ops-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: api_ops
+      POSTGRES_PASSWORD: ${OPS_PG_PASSWORD:-api_change_me}
+      POSTGRES_DB: api_ops
+    volumes:
+      - api-ops-pg:/var/lib/postgresql/data
+    networks:
+      - api-ops-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U api_ops"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    # 资源限制（小机器友好）
+    deploy:
+      resources:
+        limits:
+          memory: 384M
+        reservations:
+          memory: 128M
+
+  redis:
+    image: redis:7-alpine
+    container_name: api-ops-redis
+    restart: unless-stopped
+    command: ["redis-server", "--save", "60", "1", "--maxmemory", "128mb", "--maxmemory-policy", "allkeys-lru"]
+    volumes:
+      - api-ops-redis:/data
+    networks:
+      - api-ops-net
+    deploy:
+      resources:
+        limits:
+          memory: 192M
+        reservations:
+          memory: 32M
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: api-ops:latest
+    container_name: api-ops-api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8088:8088"
+    env_file:
+      - .env
+    environment:
+      # 容器内连接同网络的服务
+      - OPS_DB_DSN=host=postgres port=5432 user=api_ops password=${OPS_PG_PASSWORD:-api_change_me} dbname=api_ops sslmode=disable TimeZone=Asia/Shanghai
+      - REDIS_ADDR=redis:6379
+      - GIN_MODE=release
+      # 生产禁用 seed，避免污染真实数据
+      - SEED_ON_START=false
+    networks:
+      - api-ops-net
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:8088/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+        reservations:
+          memory: 128M
+
+volumes:
+  api-ops-pg:
+  api-ops-redis:
+
+networks:
+  api-ops-net:
+    driver: bridge

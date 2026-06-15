@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>upstream 客户对账单 - {{.Username}} - {{.Period}}</title>
+<style>
+  body { font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; max-width: 960px; margin: 24px auto; padding: 0 16px; color: #1f1f1f; }
+  h1 { color: #1f1f1f; border-bottom: 2px solid #1677ff; padding-bottom: 8px; }
+  h2 { color: #444; margin-top: 32px; border-left: 4px solid #1677ff; padding-left: 12px; }
+  .meta { color: #666; font-size: 13px; margin-bottom: 16px; }
+  .summary { background: #f6f6f6; padding: 16px 20px; border-radius: 6px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px 24px; }
+  .summary dt { font-weight: 600; color: #666; font-size: 13px; margin: 0; }
+  .summary dd { margin: 2px 0 8px 0; font-size: 18px; font-weight: 500; }
+  .summary dd.total { color: #cf1322; font-size: 22px; }
+  table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 13px; }
+  th, td { border: 1px solid #e0e0e0; padding: 8px 10px; text-align: right; }
+  th:first-child, td:first-child { text-align: left; }
+  th { background: #fafafa; font-weight: 600; }
+  tr.total { font-weight: 600; background: #fff7e6; }
+  tr.total td { border-top: 2px solid #faad14; }
+  .empty { color: #999; font-style: italic; text-align: center; padding: 24px; }
+  .footer { color: #999; font-size: 12px; margin-top: 48px; text-align: center; padding-top: 16px; border-top: 1px solid #e0e0e0; }
+</style>
+</head>
+<body>
+
+<h1>upstream 客户对账单</h1>
+<div class="meta">
+  客户: <strong>{{.Username}}</strong> (ID: {{.UserID}}) |
+  周期: <strong>{{.Period}}</strong> |
+  生成时间: <strong>{{.GeneratedAtRFC3339}}</strong>
+</div>
+
+<h2>汇总</h2>
+<dl class="summary">
+  <dt>调用次数</dt>           <dd>{{thousands .Summary.RequestCount}}</dd>
+  <dt>输入 tokens</dt>         <dd>{{thousands .Summary.PromptTokens}}</dd>
+  <dt>输出 tokens</dt>         <dd>{{thousands .Summary.CompletionTokens}}</dd>
+  <dt>合计金额</dt>            <dd class="total">${{thousandsFloat .Summary.RevenueUSD}} USD</dd>
+</dl>
+
+<h2>按天明细</h2>
+{{if .ByDay}}
+<table>
+  <thead>
+    <tr>
+      <th>日期</th>
+      <th>调用次数</th>
+      <th>输入 tokens</th>
+      <th>输出 tokens</th>
+      <th>缓存 tokens</th>
+      <th>USD</th>
+    </tr>
+  </thead>
+  <tbody>
+    {{range .ByDay}}
+    <tr>
+      <td>{{.Date}}</td>
+      <td>{{thousands .RequestCount}}</td>
+      <td>{{thousands .PromptTokens}}</td>
+      <td>{{thousands .CompletionTokens}}</td>
+      <td>{{thousands .CacheTokens}}</td>
+      <td>${{thousandsFloat .RevenueUSD}}</td>
+    </tr>
+    {{end}}
+    <tr class="total">
+      <td>合计</td>
+      <td>{{thousands .Summary.RequestCount}}</td>
+      <td>{{thousands .Summary.PromptTokens}}</td>
+      <td>{{thousands .Summary.CompletionTokens}}</td>
+      <td>{{thousands .Summary.CacheTokens}}</td>
+      <td>${{thousandsFloat .Summary.RevenueUSD}}</td>
+    </tr>
+  </tbody>
+</table>
+{{else}}
+<p class="empty">本月无调用记录</p>
+{{end}}
+
+<h2>按模型明细</h2>
+{{if .ByModel}}
+<table>
+  <thead>
+    <tr>
+      <th>模型</th>
+      <th>调用次数</th>
+      <th>输入 tokens</th>
+      <th>输出 tokens</th>
+      <th>缓存 tokens</th>
+      <th>USD</th>
+    </tr>
+  </thead>
+  <tbody>
+    {{range .ByModel}}
+    <tr>
+      <td>{{.ModelName}}</td>
+      <td>{{thousands .RequestCount}}</td>
+      <td>{{thousands .PromptTokens}}</td>
+      <td>{{thousands .CompletionTokens}}</td>
+      <td>{{thousands .CacheTokens}}</td>
+      <td>${{thousandsFloat .RevenueUSD}}</td>
+    </tr>
+    {{end}}
+    <tr class="total">
+      <td>合计</td>
+      <td>{{thousands .Summary.RequestCount}}</td>
+      <td>{{thousands .Summary.PromptTokens}}</td>
+      <td>{{thousands .Summary.CompletionTokens}}</td>
+      <td>{{thousands .Summary.CacheTokens}}</td>
+      <td>${{thousandsFloat .Summary.RevenueUSD}}</td>
+    </tr>
+  </tbody>
+</table>
+{{else}}
+<p class="empty">本月无模型记录</p>
+{{end}}
+
+<div class="footer">
+  本账单由 api-ops 自动生成 · 数据源: newapi logs · 计费单位: USD
+</div>
+
+</body>
+</html>

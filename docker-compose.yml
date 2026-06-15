@@ -1,0 +1,95 @@
+# docker-compose for api-ops 本地开发
+# 一键启动 PG + Redis + api-ops 后端 + 前端 dev server
+
+services:
+  postgres:
+    image: postgres:15
+    container_name: api-ops-postgres
+    restart: unless-stopped
+    # 3.4GB 机器 (升级后): PG 限 1GB, 留 1GB 给其他容器 + 1.4GB 给系统
+    mem_limit: 1024m
+    mem_reservation: 512m
+    environment:
+      POSTGRES_USER: api_ops
+      POSTGRES_PASSWORD: change_me
+      POSTGRES_DB: api_ops
+    ports:
+      # P0-5 修: 5433 端口只本机访问, 不暴露 0.0.0.0
+      # 生产用 docker exec / docker network 进入; 远程访问走 SSH 隧道
+      - "127.0.0.1:5433:5432"
+    volumes:
+      - api-ops-pg:/var/lib/postgresql/data
+    networks:
+      - api-ops-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U api_ops"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7
+    container_name: api-ops-redis
+    restart: unless-stopped
+    command: ["redis-server", "--save", "60", "1", "--maxmemory", "200mb", "--maxmemory-policy", "allkeys-lru", "--bind", "127.0.0.1", "--protected-mode", "yes"]
+    # 3.4GB 机器: Redis 限 256MB, maxmemory 200mb (之前 96mb, 留余量给 key 增长)
+    mem_limit: 256m
+    mem_reservation: 128m
+    ports:
+      # P0-5 修: 6379 也只本机访问
+      - "127.0.0.1:6379:6379"
+    networks:
+      - api-ops-net
+
+  api:
+    image: api-ops:latest
+    container_name: api-ops-api
+    restart: unless-stopped
+    # 3.4GB 机器: api 限 1GB, percentile SQL 等大数据聚合不再怕 OOM
+    mem_limit: 1024m
+    mem_reservation: 384m
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      # 同时暴露 8088 (开发) + 8091 (用户在 ECS 安全组开放的入站端口)
+      - "8088:8088"
+      - "8091:8088"
+    env_file:
+      - .env
+    environment:
+      - OPS_DB_DSN=host=postgres port=5432 user=api_ops password=change_me dbname=api_ops sslmode=disable TimeZone=Asia/Shanghai
+      - REDIS_ADDR=redis:6379
+      - SEED_ON_START=${SEED_ON_START:-false}
+      - SEED_SCALE=${SEED_SCALE:-small}
+    networks:
+      - api-ops-net
+
+  # web 容器 (升级到 3.4GB 后启用)
+  # Vite dev server (HMR), 1.6GB 不够, 3.4GB 充足
+  # 当前 8091 已经 serve React SPA dist, 本容器是 dev 模式 (HMR + 实时 reload)
+  # 生产: 建议只用 8091 dist, 本容器作为开发时用 (5173 端口)
+  web:
+    image: node:20-alpine
+    container_name: api-ops-web
+    working_dir: /app/web
+    restart: unless-stopped
+    # Vite 编译 + 缓存耗内存, 给 384MB
+    mem_limit: 384m
+    depends_on:
+      - api
+    ports:
+      - "127.0.0.1:5173:5173"  # 本机开发访问, 不暴露公网
+    volumes:
+      - ./web:/app/web
+    # 用 npm 而不是 bun (避免 corepack bun@latest 失败)
+    command: sh -c "npm install --no-audit --no-fund && npm run dev -- --host 0.0.0.0"
+    networks:
+      - api-ops-net
+
+volumes:
+  api-ops-pg:
+
+networks:
+  api-ops-net:
+    driver: bridge

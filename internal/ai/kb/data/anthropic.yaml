@@ -1,0 +1,72 @@
+# Anthropic 错误码知识库
+- code: rate_limit_error
+  http_status: 429
+  category: rate_limit
+  severity: warning
+  root_causes:
+    - 超过 Anthropic RPM / ITPM / OTPM 配额
+    - 多工作区共享账号触发全局 throttle
+  patterns:
+    - "rate_limit_error"
+    - "Too many requests"
+    - "ITPM"
+    - "OTPM"
+  actions:
+    - 客户端指数退避
+    - 申请提升 workspace 配额
+    - 拆分大请求到多 workspace
+  doc_url: https://docs.anthropic.com/en/api/errors
+
+- code: invalid_request_error
+  http_status: 400
+  category: client
+  severity: info
+  root_causes:
+    - 请求参数非法（max_tokens 必填 / temperature 范围）
+    - prompt 超过 200K context window
+    - 多模态图片 base64 格式错
+  patterns:
+    - "invalid_request_error"
+    - "max_tokens is required"
+    - "prompt is too long"
+    - "context length"
+  actions:
+    - 确认 max_tokens 字段非空
+    - 缩短 prompt
+    - 校验图片 base64
+  doc_url: https://docs.anthropic.com/en/api/errors
+
+- code: authentication_error
+  http_status: 401
+  category: auth
+  severity: high
+  root_causes:
+    - x-api-key 无效或过期
+    - 账号被禁用
+  patterns:
+    - "authentication_error"
+    - "Invalid API Key"
+    - "Unauthorized"
+    - "x-api-key"
+  actions:
+    - 检查 API key 前缀（sk-ant-）
+    - 重新生成并替换
+    - 确认账号状态正常
+  doc_url: https://docs.anthropic.com/en/api/errors
+
+- code: overloaded_error
+  http_status: 529
+  category: server
+  severity: warning
+  root_causes:
+    - Anthropic 服务过载
+    - 高峰期模型推理排队
+  patterns:
+    - "overloaded_error"
+    - "529"
+    - "API is temporarily overloaded"
+  actions:
+    - 立即重试（带退避）
+    - 切到低峰时段调用
+    - 切换到 OpenAI 等备用模型
+  doc_url: https://docs.anthropic.com/en/api/errors

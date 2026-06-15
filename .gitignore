@@ -1,0 +1,36 @@
+# ===== 敏感配置 / 运行时数据 =====
+.env
+.env.local
+.env.*.local
+
+# ===== 系统文件 =====
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+
+# ===== 构建产物 / 大文件 =====
+seed                       # 13517 KB demo 数据二进制
+bin/
+*.log
+*.pid
+
+# ===== Go =====
+*.test
+*.out
+vendor/
+
+# ===== Node / 前端 =====
+web/node_modules/
+web/dist/
+web/.vite/
+web/.env
+web/.env.local
+
+# ===== 本地调试 =====
+*.local
+tmp/
+temp/
