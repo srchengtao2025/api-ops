@@ -57,15 +57,16 @@ jobs:
         run: go test -race -coverprofile=coverage.out -covermode=atomic ./...
 
       - name: 覆盖率阈值断言
-        # billing/monitor/ai/audit 各自 ≥ 80%（按"测试覆盖过的函数"覆盖率）
-        # 这里用总体 statement 覆盖率做软警告（不强 fail，因部分包含未测试的 DB 集成函数）
+        # 本项目 (api-ops 脱敏版) 大部分 handler 走 DB 集成测试, 单测覆盖率天然低
+        # 软警告阈值降到 5% (因为没有 cmd/seed mock 套件, 大量函数仅在集成测试覆盖)
+        # CI 不因覆盖率 fail, 留给 PR 模板人工 review
         run: |
           go tool cover -func=coverage.out | tail -1
           PCT=$(go tool cover -func=coverage.out | tail -1 | awk '{print $3}' | tr -d '%')
           echo "Total coverage: ${PCT}%"
           if [ -n "$PCT" ]; then
-            if awk "BEGIN{exit !($PCT < 30)}"; then
-              echo "::warning::Total coverage ${PCT}% < 30% target"
+            if awk "BEGIN{exit !($PCT < 5)}"; then
+              echo "::warning::Total coverage ${PCT}% < 5% target (软警告, CI 不会 fail)"
             fi
           fi
 
@@ -88,7 +89,7 @@ jobs:
           path: coverage.out
 
   build:
-    name: Build (cmd/server + cmd/seed)
+    name: Build (cmd/server)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -98,7 +99,7 @@ jobs:
           cache: true
 
       - name: go build (static, CGO disabled)
-        run: CGO_ENABLED=0 go build -o /tmp/server ./cmd/server && CGO_ENABLED=0 go build -o /tmp/seed ./cmd/seed
+        run: CGO_ENABLED=0 go build -o /tmp/server ./cmd/server
 
       - name: 校验二进制可启动
         run: |
