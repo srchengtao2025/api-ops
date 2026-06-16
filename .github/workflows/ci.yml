@@ -113,6 +113,22 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Set up Node.js (build web/dist)
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: web/package-lock.json
+
+      - name: npm ci + build (生成 web/dist)
+        working-directory: web
+        run: |
+          npm ci --no-audit --no-fund
+          npm run build
+          # 验证 dist 真生成
+          test -f dist/index.html || (echo "❌ dist/index.html missing" && exit 1)
+          echo "✓ web/dist built"
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
