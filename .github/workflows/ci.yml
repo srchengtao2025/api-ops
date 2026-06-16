@@ -131,6 +131,9 @@ jobs:
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
+        with:
+          # 用 docker driver 而不是 docker-container (避免拉 moby/buildkit 镜像网络超时)
+          driver: docker
 
       - name: Build image
         run: docker build -t api-ops-api:test .
