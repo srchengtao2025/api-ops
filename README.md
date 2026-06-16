@@ -1,23 +1,23 @@
 # api-ops
 
-> LLM API 渠道聚合场景的运营管理后台。  
+> 针对 [newapi](https://github.com/songquanpeng/one-api) 写的运营管理工具。  
 > Dashboard 看板 / 客户对账 / 上游对账 / 利润分析 / 监控告警，**3 数据源铁律 + 5 大能力**一站式搞定。
 
-> English: see [README.en.md](./README.en.md) — Operations management console for LLM API aggregation
+> English: see [README.en.md](./README.en.md) — Operations management tool written for [newapi](https://github.com/songquanpeng/one-api)
 > (dashboard, customer billing, vendor billing, profit analysis, monitoring & alerts).
 
 ---
 
 ## 适用场景 / Use case
 
-你手里有一堆 LLM API 渠道（OpenAI / Anthropic / 国内云厂商 / 自建代理），卖 token 给你自己的客户，想：
+你在跑一个 [newapi](https://github.com/songquanpeng/one-api) 实例，卖 token 给你自己的客户，想：
 
 - ✅ 每天看每个客户的消耗、付款、成本、毛利
 - ✅ 跟上游供应商月度对账（算你欠每个供应商多少钱）
 - ✅ 监控渠道错误率、延迟、稳定性
 - ✅ 异常告警 + AI 自动归因
 
-**api-ops 就是干这个的。** 单租户、内网部署、10 人内运营团队、月对账级别精度。
+**api-ops 就是干这个的。** 通过只读 DB + Admin API Token 与 newapi 通信（**不修改 newapi 任何代码**），单租户、内网部署、10 人内运营团队、月对账级别精度。
 
 ---
 

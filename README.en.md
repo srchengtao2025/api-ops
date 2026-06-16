@@ -1,6 +1,6 @@
 # api-ops
 
-> An operations management console for LLM API aggregation scenarios.
+> An operations management tool written for [newapi](https://github.com/songquanpeng/one-api).  
 > Dashboard / customer billing / vendor billing / profit analysis / monitoring & alerts —
 > all built on the **3 data-source rule + 5 capabilities** principle.
 
@@ -10,15 +10,17 @@
 
 ## Use case
 
-You run a bunch of LLM API channels (OpenAI / Anthropic / Chinese cloud vendors / self-hosted proxies),
-resell tokens to your customers, and want to:
+You run a [newapi](https://github.com/songquanpeng/one-api) instance, resell tokens to your customers,
+and want to:
 
 - Track daily per-customer usage, payments, cost, and gross margin
 - Reconcile monthly with upstream vendors (how much you owe each)
 - Monitor channel error rate, latency, stability
 - Get alerts + AI-driven root-cause analysis on anomalies
 
-**api-ops does exactly that.** Single-tenant, on-prem, sub-10-person ops team, monthly reconciliation precision.
+**api-ops does exactly that.** It talks to newapi via a read-only DB account + Admin API token
+(**does not modify newapi in any way**), single-tenant, on-prem, sub-10-person ops team, monthly
+reconciliation precision.
 
 ---
 
