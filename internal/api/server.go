@@ -172,6 +172,23 @@ func (s *Server) registerRoutes() {
 		api.GET("/dashboard/today", s.dashboardToday)
 		// /dashboard/trend-7d 7 天曲线 (不含今天), admin 1 轮 7 调用 + 后端 cache 5min (2026-06-15 加回)
 		api.GET("/dashboard/trend-7d", s.dashboardTrend7d)
+
+		// ===== 客户健康度模块 (2026-07-09, api-ops 同步 rezeai-ops) =====
+		// 48h 错误率 + 缓存复用率自动统计, 支持异步 HTML 详情导出
+		// api-ops 单站 (无 Site 字段, handler 永远走默认 intl)
+		// 数据源: cache_logs_summary_by_user_5min (1min 预聚合) + RoDB logs
+		// 错误率: error / (error + success) (退款不算分母)
+		// 缓存复用率: cache / prompt (B 公式, 跟 Anthropic / OpenAI 业内规范一致)
+		api.GET("/customer-health/overview", s.customerHealthOverview)
+		api.GET("/customer-health/:user_id", s.customerHealthDetail)
+		api.POST("/customer-health/:user_id/export-errors",
+			requireRole(string(dal.OpsUserRoleAdmin), string(dal.OpsUserRoleFinance)),
+			s.customerHealthExportErrors)
+		api.POST("/customer-health/:user_id/export-hits",
+			requireRole(string(dal.OpsUserRoleAdmin), string(dal.OpsUserRoleFinance)),
+			s.customerHealthExportHits)
+		api.GET("/customer-health/export-tasks", s.customerHealthExportTasks)
+		api.GET("/customer-health/export-tasks/:task_id/download", s.customerHealthDownload)
 		// /dashboard/trend 已删除 (2026-06-14): admin API 不给按天趋势
 		// TopX 3 路由全部禁用 (2026-06-14): 用户决策 - 全 admin API + 砍 TopX 卡片.
 		// admin /api/log/stat 不带分组维度, admin /api/data/ 表空, 18次/5min 限流.

@@ -1,4 +1,4 @@
-// Package dal: upstream/newapi logs 表的只读数据访问
+// Package dal: rezeai/newapi logs 表的只读数据访问
 // 数据源：newapi/model/log.go 中的 Log 结构体
 // 注意：本包只允许 SELECT，禁止写
 package dal
@@ -176,6 +176,22 @@ func QueryLogs(ctx context.Context, q LogQuery) ([]LogMirror, error) {
 	}
 	var rows []LogMirror
 	err := q.apply(RoDB().WithContext(ctx)).Find(&rows).Error
+	return rows, err
+}
+
+// QueryLogsOnDB 多站版本 (2026-07-09): 显式传 *gorm.DB, 走指定 site RoDB
+//
+// 跟 QueryLogs 区别: 后者写死 RoDB() (intl), 多站场景 (cn) 拿不到 cn 站数据
+// 客户健康度模块 (PR-B) 漏用 QueryLogs, cn 站 detail 返空. PR-G 修.
+//
+// 用法:
+//   rows, err := dal.QueryLogsOnDB(ctx, dal.GetRO("cn"), q)
+func QueryLogsOnDB(ctx context.Context, db *gorm.DB, q LogQuery) ([]LogMirror, error) {
+	if db == nil {
+		return nil, ErrNoRoDB
+	}
+	var rows []LogMirror
+	err := q.apply(db.WithContext(ctx)).Find(&rows).Error
 	return rows, err
 }
 

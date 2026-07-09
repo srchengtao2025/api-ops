@@ -208,14 +208,40 @@ func processOneTask(ctx context.Context, workerID int, task *dal.BillingExportTa
 // BILLING v3 (PR #4, 2026-06-14) 加 switch kind:
 //   - "customer" → 走 v2 路径 (QueryStatement + RenderHTML/XLSX + PackZip)
 //   - "upstream" → 走 v3 路径 (CalcUpstreamStatement + RenderUpstreamHTML/XLSX + PackUpstreamZip)
+//
+// 客户健康度模块 (2026-07-09, api-ops 同步 rezeai-ops):
+//   - "customer_health" → 走 health_export.go 路径 (HTML 详情, 无 ZIP 打包)
+//     - task.VendorCode = "errors" → 错误详情 HTML
+//     - task.VendorCode = "hits"   → 命中详情 HTML
 func generateStatement(ctx context.Context, task *dal.BillingExportTask) (string, int64, error) {
 	switch task.Kind {
 	case "", "customer":
 		return generateCustomerStatement(ctx, task)
 	case "upstream":
 		return generateUpstreamStatementTask(ctx, task)
+	case "customer_health":
+		return generateCustomerHealthStatement(ctx, task)
 	default:
 		return "", 0, fmt.Errorf("unknown task kind: %s", task.Kind)
+	}
+}
+
+// generateCustomerHealthStatement 客户健康度导出 (2026-07-09)
+//
+// 入参: task.VendorCode = "errors" (错误详情) / "hits" (命中详情)
+//       task.Period = "48h" / "7d" / "30d" (滑动窗口)
+// 流程:
+//  1. 按 VendorCode 路由到 generateCustomerHealthErrorHTML / generateCustomerHealthHitHTML
+//  2. 走 health_export.go 的 CustomerHealthDetailByUser 拿聚合 + 详情
+//  3. 渲染单 HTML 写到 /data/customer-health-exports/{task_id}.html
+func generateCustomerHealthStatement(ctx context.Context, task *dal.BillingExportTask) (string, int64, error) {
+	switch task.VendorCode {
+	case "errors":
+		return generateCustomerHealthErrorHTML(ctx, task)
+	case "hits":
+		return generateCustomerHealthHitHTML(ctx, task)
+	default:
+		return "", 0, fmt.Errorf("customer_health task requires vendor_code='errors' or 'hits', got: %q", task.VendorCode)
 	}
 }
 

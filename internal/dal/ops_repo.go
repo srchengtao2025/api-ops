@@ -820,17 +820,23 @@ func CountBillingExportTasksRunningByUser(ctx context.Context, userID int) (int6
 //   - VendorCode: v3 上游对账时填, 客户对账任务为空
 type BillingExportTaskQuery struct {
 	UserID     int    // 0 = 全部
-	Kind       string // "" = 全部, "customer" / "upstream"
+	Kind       string // "" = 全部, "customer" / "upstream" / "customer_health"
 	VendorCode string // "" = 全部
 	Status     string // "" = 全部
-	Limit      int
-	Offset     int
+	// 客户健康度模块 (2026-07-09, api-ops 同步 rezeai-ops PR-G): 加 Site 字段
+	// api-ops 单站, 暂不使用, 但结构兼容, 后续多站接入时启用
+	Site  string // "" = 全部 (单站默认)
+	Limit int
+	Offset int
 }
 
 func ListBillingExportTasks(ctx context.Context, q BillingExportTaskQuery) ([]BillingExportTask, int64, error) {
 	var rows []BillingExportTask
 	var total int64
 	db := OPS.WithContext(ctx).Model(&BillingExportTask{})
+	if q.Site != "" {
+		db = db.Where("site = ?", q.Site)
+	}
 	if q.UserID > 0 {
 		db = db.Where("user_id = ?", q.UserID)
 	}

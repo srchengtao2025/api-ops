@@ -1,8 +1,39 @@
 import axios from 'axios'
 
 // ===== A 阶段: JWT token 持久化 (localStorage) =====
-const TOKEN_KEY = 'api_ops_token'
-const USER_KEY = 'api_ops_user'
+const TOKEN_KEY = 'rezeai_ops_token'
+const USER_KEY = 'rezeai_ops_user'
+
+// ===== 多站点 (2026-07-04) =====
+// site: "intl" (国际站, 默认) | "cn" (国内站, 走 ECS 跳板到国内 RDS)
+const SITE_KEY = 'rezeai_ops_site'
+export type SiteCode = 'intl' | 'cn'
+
+export function getSite(): SiteCode {
+  const v = localStorage.getItem(SITE_KEY) as SiteCode | null
+  if (v === 'cn' || v === 'intl') return v
+  return 'intl' // 默认
+}
+export function setSite(s: SiteCode) {
+  localStorage.setItem(SITE_KEY, s)
+}
+
+// 2026-07-04: site 决定渲染币种
+//   - intl: USD 美元 ($)
+//   - cn:   RMB 人民币 (¥)
+export function getCurrency(): 'USD' | 'RMB' {
+  return getSite() === 'cn' ? 'RMB' : 'USD'
+}
+export function getCurrencySymbol(): '$' | '¥' {
+  return getSite() === 'cn' ? '¥' : '$'
+}
+// 格式化金额: ¥1,234.56 / $1,234.56
+export function fmtMoney(n: number, opts?: { minFrac?: number; maxFrac?: number }): string {
+  const sym = getCurrencySymbol()
+  const min = opts?.minFrac ?? 2
+  const max = opts?.maxFrac ?? 2
+  return `${sym}${n.toLocaleString(undefined, { minimumFractionDigits: min, maximumFractionDigits: max })}`
+}
 
 export function getToken(): string | null {
   return localStorage.getItem(TOKEN_KEY)
@@ -35,13 +66,17 @@ export const http = axios.create({
   timeout: 30000,
 })
 
-// 请求拦截器: 自动加 JWT
+// 请求拦截器: 自动加 JWT + 自动加 site query param
 http.interceptors.request.use((config) => {
   const t = getToken()
   if (t) {
     config.headers = config.headers || {}
     config.headers['Authorization'] = `Bearer ${t}`
   }
+  // 多站点 (2026-07-04): 所有请求自动带 site=cn / site=intl (默认 intl)
+  const site = getSite()
+  config.params = config.params || {}
+  config.params.site = site
   return config
 })
 
@@ -118,6 +153,8 @@ export interface V2CustomerMonthItem {
   cache_tokens: number
   cache_tokens: number
   revenue_usd: number
+  revenue: number       // 2026-07-04: 按 site 币种 (intl=USD, cn=RMB 1USD=7RMB)
+  currency: 'USD' | 'RMB'
   request_count: number
 }
 
@@ -207,7 +244,7 @@ export interface V4ProfitByModel {
   profit_rate: number
 }
 
-export interface upstreamChannel {
+export interface RezeaiChannel {
   id: number
   name: string
   type: number
@@ -218,6 +255,63 @@ export interface upstreamChannel {
   balance: number
   balance_updated_time: number
   response_time: number
+}
+
+// ===== 客户健康度 SPA type (2026-07-08) =====
+
+export type HealthLevel = 'healthy' | 'warning' | 'critical'
+
+export interface HealthItem {
+  user_id: number
+  username: string
+  request_count: number
+  success_count: number
+  error_count: number
+  prompt_tokens: number
+  cache_tokens: number
+  quota: number
+  error_rate: number      // 0-1
+  cache_rate: number      // 0-1
+  health_level: HealthLevel
+  health_reasons: string  // 等级解释, 逗号分隔
+}
+
+export interface HealthDetailItem {
+  id: number
+  created_at: number
+  model_name: string
+  channel_id: number
+  prompt_tokens: number
+  completion_tokens: number
+  cache_tokens: number
+  error_type?: number     // 错误详情时填
+  content?: string        // 错误堆栈 / 摘要
+}
+
+export interface HealthDetail {
+  user_id: number
+  username: string
+  period: string
+  request_count: number
+  success_count: number
+  error_count: number
+  prompt_tokens: number
+  cache_tokens: number
+  error_rate: number
+  cache_rate: number
+  health_level: HealthLevel
+  health_reasons: string
+  errors: HealthDetailItem[]
+  hits: HealthDetailItem[]
+  errors_truncated: boolean
+  hits_truncated: boolean
+}
+
+export interface HealthExportTaskResp {
+  task_id: string
+  status: 'pending' | 'running' | 'success' | 'failed' | 'cancelled'
+  kind: 'errors' | 'hits'
+  period: string
 }
 
 export const api = {
@@ -238,8 +332,8 @@ export const api = {
     http.post('/channel-vendors', m),
   deleteChannelVendor: (id: number) => http.delete(`/channel-vendors/${id}`),
 
-  // upstream channels
-  listupstreamChannels: () => http.get<upstreamChannel[]>('/upstream/channels'),
+  // rezeai channels
+  listRezeaiChannels: () => http.get<RezeaiChannel[]>('/rezeai/channels'),
 
   // ===== BILLING v2 (PR #5 / 8, 2026-06-14) =====
   //
@@ -332,6 +426,33 @@ export const api = {
   // monitorAlerts, monitorAckAlert, monitorResolveAlert
 
   config: () => http.get('/config'),
+
+  // ===== 客户健康度 (2026-07-08) =====
+  //
+  // 后端 6 端点:
+  //   GET  /customer-health/overview                  全部客户 48h 健康度
+  //   GET  /customer-health/:user_id                  单客户详情 (预览前 100 条)
+  //   POST /customer-health/:user_id/export-errors     异步导出错误详情 HTML
+  //   POST /customer-health/:user_id/export-hits       异步导出命中详情 HTML
+  //   GET  /customer-health/export-tasks              任务中心列表
+  //   GET  /customer-health/export-tasks/:task_id/download  下载 HTML
+  customerHealthOverview: (params: { period?: string; level?: HealthLevel } = {}) =>
+    http.get<{
+      site: string
+      period: string
+      stats: { total: number; healthy: number; warning: number; critical: number }
+      items: HealthItem[]
+    }>('/customer-health/overview', { params }),
+  customerHealthDetail: (userId: number, params: { period?: string } = {}) =>
+    http.get<{ site: string; detail: HealthDetail }>(`/customer-health/${userId}`, { params }),
+  customerHealthExportErrors: (userId: number, params: { period?: string } = {}) =>
+    http.post<HealthExportTaskResp>(`/customer-health/${userId}/export-errors`, null, { params }),
+  customerHealthExportHits: (userId: number, params: { period?: string } = {}) =>
+    http.post<HealthExportTaskResp>(`/customer-health/${userId}/export-hits`, null, { params }),
+  customerHealthExportTasks: (params: { status?: string; limit?: number; offset?: number } = {}) =>
+    http.get<ListResp<V2ExportTask>>('/customer-health/export-tasks', { params }),
+  customerHealthDownloadUrl: (taskId: string) =>
+    `/customer-health/export-tasks/${taskId}/download`,
 }
 
 // UpstreamPricingImport interface 已下线 (2026-06-14)

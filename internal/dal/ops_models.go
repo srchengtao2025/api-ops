@@ -500,10 +500,14 @@ type BillingExportTask struct {
 	TaskID     string     `gorm:"size:64;uniqueIndex;not null" json:"task_id"` // uuid, 暴露给前端
 	UserID     int        `gorm:"not null" json:"user_id"`
 	Username   string     `gorm:"size:64;not null" json:"username"` // 冗余, 列表展示
-	Period     string     `gorm:"size:7;not null" json:"period"`    // '2026-05'
+	Period     string     `gorm:"size:7;not null" json:"period"`    // '2026-05' / '48h' / '7d' / '30d'
 	Formats    string     `gorm:"size:32;not null" json:"formats"`  // 'html' / 'xlsx' / 'html,xlsx'
-	Kind       string     `gorm:"size:16;not null;default:'customer';check:kind IN ('customer','upstream')" json:"kind"`
-	VendorCode string     `gorm:"size:64" json:"vendor_code"`
+	Kind       string     `gorm:"size:16;not null;default:'customer';check:kind IN ('customer','upstream','customer_health')" json:"kind"`
+	// 客户健康度模块 (2026-07-09, api-ops 同步 rezeai-ops):
+	//   - VendorCode 区分 errors / hits
+	//   - Site 字段保留 (api-ops 单站默认 'intl', 多站接入时启用)
+	VendorCode string `gorm:"size:64" json:"vendor_code"`
+	Site       string `gorm:"size:16;not null;default:'intl';index" json:"site"`
 	Status     string     `gorm:"size:16;not null;default:pending" json:"status"`
 	Progress   int        `gorm:"default:0" json:"progress"`  // 0-100
 	FilePath   string     `gorm:"type:text" json:"file_path"` // /data/billing-exports/{task_id}.zip

@@ -16,6 +16,7 @@ import {
 import { Routes, Route, Link, useLocation, Navigate, useNavigate } from 'react-router-dom'
 import { useState } from 'react'
 import { Dropdown, Tag, message } from 'antd'
+import { getSite } from './api'
 import Dashboard from './pages/Dashboard'
 import VendorManagement from './pages/VendorManagement'
 // UpstreamPricing.tsx 已下线 (2026-06-14), 成本反推改用渠道供应商折扣
@@ -25,6 +26,7 @@ import BillingV2Exports from './pages/BillingV2Exports'
 import BillingV3Upstream from './pages/BillingV3Upstream'
 import BillingV4Profit from './pages/BillingV4Profit'
 import ChannelHealth from './pages/ChannelHealth'
+import CustomerHealth from './pages/CustomerHealth'
 import ChangePasswordModal from './components/ChangePasswordModal'
 import { authApi, getUser, clearToken, type AuthUser } from './api'
 
@@ -40,16 +42,17 @@ const ROLE_LABEL: Record<string, string> = {
 }
 
 // 菜单项 + 路径 -> 面包屑段
-type NavItem = { path: string; label: string; icon: React.ReactNode; group?: string }
+type NavItem = { path: string; label: string; icon: React.ReactNode; group?: string; sites?: ('intl' | 'cn')[] }
 const NAV_ITEMS: NavItem[] = [
   { path: '/dashboard', label: '总览看板', icon: <DashboardOutlined />, group: '总览' },
   { path: '/billing/v2/customer', label: '客户账单 (v2)', icon: <FileTextOutlined />, group: '对账中心' },
   { path: '/billing/v3/upstream', label: '上游对账 (v3)', icon: <ShopOutlined />, group: '对账中心' },
-  { path: '/billing/v4/profit', label: '利润分析 (v4)', icon: <FundOutlined />, group: '对账中心' },
+  { path: '/billing/v4/profit', label: '利润分析 (v4)', icon: <FundOutlined />, group: '对账中心', sites: ['intl'] },
   { path: '/billing/exports', label: '任务中心', icon: <FileZipOutlined />, group: '对账中心' },
   { path: '/vendor/channels', label: '渠道供应商', icon: <LinkOutlined />, group: '供应商管理' },
   { path: '/vendor/vendors', label: '供应商档案', icon: <ShopOutlined />, group: '供应商管理' },
   { path: '/monitor/channels', label: '渠道健康', icon: <MonitorOutlined />, group: '监控中心' },
+  { path: '/customer-health', label: '客户健康度', icon: <MonitorOutlined />, group: '监控中心' },
 ]
 
 const GROUPS = ['总览', '对账中心', '供应商管理', '监控中心'] as const
@@ -94,12 +97,13 @@ export default function App() {
         <div className="logo">
           <div className="logo-mark">R</div>
           <div>
-            <div className="logo-text">upstream ops</div>
+            <div className="logo-text">rezeai ops</div>
             <div className="logo-sub">运营驾驶舱 v1.0</div>
           </div>
         </div>
         {GROUPS.map((g) => {
-          const items = NAV_ITEMS.filter((it) => it.group === g)
+          const site = getSite()
+          const items = NAV_ITEMS.filter((it) => it.group === g && (!it.sites || it.sites.includes(site)))
           if (!items.length) return null
           return (
             <div key={g}>
@@ -126,7 +130,7 @@ export default function App() {
       {/* Header */}
       <header className="app-header">
         <div className="breadcrumb">
-          <Link to="/dashboard">api-ops</Link>
+          <Link to="/dashboard">rezeai-ops</Link>
           <span className="sep">/</span>
           {currentNav?.group && (
             <>
@@ -139,7 +143,7 @@ export default function App() {
         <div className="header-right">
           <span className="env-badge">
             <span className="status-dot success" />
-            公网 · api-ops.example.com
+            公网 · {'<your-server>'}
           </span>
           <span style={{ fontSize: 12, color: 'var(--text-tertiary)', fontVariantNumeric: 'tabular-nums' }}>{clock}</span>
           {me && (
@@ -176,6 +180,7 @@ export default function App() {
           <Route path="/billing/v3/upstream" element={<BillingV3Upstream />} />
           <Route path="/billing/v4/profit" element={<BillingV4Profit />} />
           <Route path="/monitor/channels" element={<ChannelHealth />} />
+          <Route path="/customer-health" element={<CustomerHealth />} />
           <Route path="*" element={<div className="ops-card" style={{ textAlign: 'center', color: 'var(--text-tertiary)', padding: 60 }}>该模块尚未实现（计划中）</div>} />
         </Routes>
       </main>

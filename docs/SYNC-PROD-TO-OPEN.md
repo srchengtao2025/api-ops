@@ -279,7 +279,7 @@ github.com/api-ops/api-ops
        │
        │  playwright 截图 + 0 console error
        ▼
-6) 合并 rezeai-ops main, 部署到 47.251.85.62 公网
+6) 合并 rezeai-ops main, 部署到 <your-server> 公网
        │
        │  飞书告警监控 24h
        ▼
@@ -330,7 +330,7 @@ glab issue create --title "Cherry-pick #N from api-ops: <PR title>" \
 - [ ] cherry-pick 到 rezeai-ops main
 - [ ] 部署到 staging (10 分钟)
 - [ ] playwright 截图 + 0 console error
-- [ ] 部署到 47.251.85.62 公网
+- [ ] 部署到 <your-server> 公网
 - [ ] 24h 监控
 
 ## 回滚计划
@@ -419,17 +419,17 @@ git cherry-pick api-open/main..tmp/cherry-pick-prN
 # 1. 部署到 staging (跟生产同 image, 端口 8089, 不同 domain)
 docker buildx build --platform linux/amd64 -t rezeai-ops:staging . --load
 docker save rezeai-ops:staging | gzip > /tmp/rezeai-staging.tar.gz
-sshpass -p '<pwd>' scp /tmp/rezeai-staging.tar.gz root@47.251.85.62:/tmp/
-ssh root@47.251.85.62 'docker load -i /tmp/rezeai-staging.tar.gz && \
+sshpass -p '<pwd>' scp /tmp/rezeai-staging.tar.gz root@<your-server>:/tmp/
+ssh root@<your-server> 'docker load -i /tmp/rezeai-staging.tar.gz && \
   docker compose -f docker-compose.staging.yml up -d api'
 
 # 2. playwright 截图 + 0 console error
-playwright-mcp screenshot http://47.251.85.62:8089/ --output=/tmp/staging.png
+playwright-mcp screenshot http://<your-server>:8089/ --output=/tmp/staging.png
 # 肉眼对 5 个页面: dashboard / customers / upstream / v4 / monitor
 # console.error 必 0 条
 
 # 3. 跑 curl 200 测受影响的端点
-ssh root@47.251.85.62 'docker exec rezeai-ops-api-staging \
+ssh root@<your-server> 'docker exec rezeai-ops-api-staging \
   curl -s -o /dev/null -w "%{http_code}\n" \
   http://localhost:8088/api/billing/v5/quarterly-overview'
 # 期望 200

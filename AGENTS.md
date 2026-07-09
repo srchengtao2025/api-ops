@@ -108,7 +108,7 @@ api-ops 严格只能有 **3 个数据源**，任何"第 4 源"必须砍掉或归
 
 | 仓库 | 类型 | 平台 | 角色 | 谁能改 |
 |---|---|---|---|---|
-| `rezeai-ops` (生产) | private | 内网 GitLab | 真源, 跑在 47.251.85.62 | 内部团队 |
+| `rezeai-ops` (生产) | private | 内网 GitLab | 真源, 跑在 <your-server> | 内部团队 |
 | `api-ops` (开源) | public | **GitHub 公开** | 脱敏镜像, 给社区读 + 提 PR | 社区, 但 PR 必走 RFC |
 
 **铁律**:
@@ -116,7 +116,7 @@ api-ops 严格只能有 **3 个数据源**，任何"第 4 源"必须砍掉或归
 1. **生产领先** — 99% 的代码改动在 `rezeai-ops` 完成, 部署验证, **手动挑非敏感 commit** cherry-pick / cherry-export 到 `api-ops`. 反向 (开源先行) 不允许, 避免公开仓库的变更倒灌回生产.
 2. **每周一次 sync** — 周末 (建议周六上午) 把生产过去 7 天的非敏感 commit 推送到开源仓库. 详见 [docs/SYNC-PROD-TO-OPEN.md](./docs/SYNC-PROD-TO-OPEN.md) SOP.
 3. **敏感判定清单** (推送前必过) — commit message 或 diff 命中以下任一, **必 skip**:
-   - 含真 IP / 真 RDS host / 真 ECS 公网 IP / 真域名 (47.251.85.62 / upstream-pg.example.com 之外的真实地址)
+   - 含真 IP / 真 RDS host / 真 ECS 公网 IP / 真域名 (<your-server> / upstream-pg.example.com 之外的真实地址)
    - 含真 token / 真密码 / 真 SSH 凭据 / 真 API key
    - 含真客户名 / 真业务数字 / 真 vendor / 真模型名 (跟 5 个假名 provider_alpha/beta/gamma/delta/epsilon / 6 个假名 llm-model-a/b/c 不一致的)
    - 含真部署路径 (`/opt/rezeai-ops` / `/data/billing-exports` 等内部路径)
@@ -280,3 +280,68 @@ zip 文件名实际由后端 `taskID.zip` 决定 (`internal/billing/upstream_for
 
 - [ ] PR 改了任何 TSX/JSX 文件, diff 里**不能**有 `\\{[a-zA-Z_]+\\}` (描述文字场景), 必须用 `<xxx>` / `$(xxx)` / 不带花括号
 - [ ] PR 改了任何 TSX/JSX 文件, playwright 截图 0 console error 是**必备**证据
+
+## 客户健康度模块 (2026-07-09, api-ops 同步 rezeai-ops, 1 squash commit)
+
+> 客户维度的"健康体检"模块, 自动统计 48h 错误率 + 缓存复用率, 异步 HTML 详情导出.
+> 同步自 rezeai-ops, **降级为单站** (无 site 字段), 跑默认 upstream.
+
+### 核心规则
+
+- **错误率口径**: `error / (error + success)`, 退款不算分母
+- **缓存复用率口径** (B 公式, 跟 Anthropic / OpenAI 业内规范一致): `cache_tokens / prompt_tokens`
+- **健康度等级**:
+  - `healthy`:  error_rate < 2% AND cache_rate >= 90%
+  - `warning`:  2% <= error_rate < 10%  OR  70% <= cache_rate < 90%
+  - `critical`: error_rate >= 10%      OR  cache_rate < 70%
+
+### 复用 vs 新加
+
+- **复用** `billing_export_tasks` 表, `kind` enum 加 `'customer_health'` (1 条 migration)
+- **复用** v2 异步导出 worker pool (kind 路由, VendorCode 区分 errors/hits)
+- **复用** `cache_logs_summary_by_user_5min` (api-ops 单站版, 无 Site 字段)
+- **新加** 文件:
+  - `internal/billing/health_export.go` (HTML 模板, 健康度等级计算)
+  - `internal/billing/health_export_test.go` (单测)
+  - `internal/api/handlers_health.go` (5 handlers)
+  - `internal/dal/cache_logs_summary_by_user.go` (by_user 预聚合表 + 1min tick 写入函数)
+  - `web/src/pages/CustomerHealth.tsx` (前端页面)
+
+### 跟 rezeai-ops 区别 (脱敏)
+
+| 维度 | rezeai-ops | api-ops |
+|---|---|---|
+| 多站 (intl + cn) | ✅ SiteMiddleware + SiteFromCtx | ❌ 永远单站 |
+| Site 字段 (billing_export_tasks) | ✅ | ❌ 字段保留但永远 "intl" |
+| Site 字段 (cache_logs_summary_by_user_5min) | ✅ | ❌ 无此字段 |
+| cn 跳板 / <port> / <jumper-host> | ✅ | ❌ 不需要 |
+| 客户健康度 handler site 参数 | ✅ | ❌ 永远 "intl" 硬编码 |
+| Cache files (/data/customer-health-exports) | ✅ | ✅ (Dockerfile 已建) |
+| 单站默认走 RoDB() | ✅ (默认 intl) | ✅ (永远 intl) |
+
+### 期间字段
+
+- `BillingExportTask.Period`: `'48h'` / `'7d'` / `'30d'` (滑动窗口)
+- 字段 size:7 装得下, **不扩 schema**
+
+### 多站接入 (后续)
+
+如果 api-ops 用户要接入多站, 参考 rezeai-ops 的 internal/billing/health_export.go 跟 internal/api/handlers_health.go:
+1. 加 `internal/api/site_middleware.go` (注入 site 到 context)
+2. `BillingExportTaskQuery.Site` 字段已就位, handler 传 site
+3. `cache_logs_summary_by_user_5min` 加 Site 字段 + UNIQUE
+4. `dal.QueryLogsOnDB(ctx, db, q)` 走多站 RoDB
+
+### 部署清单
+
+1. **跑 migration**:
+   ```bash
+   PGPASSWORD=xxx psql -h <host> -U api_ops -d api_ops \
+     -f migrations/2026-07-08-customer-health-export-kind.sql
+   ```
+2. **重建镜像** (跟 v2 同流程): `docker build -t api-ops:latest .`
+3. **启动**: `docker compose up -d api` (会带 customer-health-exports 目录)
+4. **验证**:
+   - `curl http://localhost:8088/api/customer-health/overview` 返 200 + items
+   - 浏览器打开 `/customer-health`, KPI 卡 + 表格
+   - 点"导出错误" → 任务中心 → 下载 HTML
