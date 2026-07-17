@@ -657,7 +657,8 @@ func stripPrefix(s, prefix string) string {
 
 // resolveFiredAlerts 重新评估每个 firing 告警，若条件已恢复则标记 resolved
 // (2026-07-03 FIX: 之前只用 30min 超时，不检查实际 metric 是否恢复。
-//  现在对每种规则类型重新跑 evaluator 检查，只有真正恢复才 resolve)
+//
+//	现在对每种规则类型重新跑 evaluator 检查，只有真正恢复才 resolve)
 func resolveFiredAlerts(ctx context.Context) error {
 	rows, _, err := dal.ListAlertHistories(ctx, dal.AlertHistoryQuery{
 		Status: "firing", Limit: 500,

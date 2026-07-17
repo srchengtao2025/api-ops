@@ -174,6 +174,7 @@ func getEnvFloat(key string, def float64) float64 {
 	}
 	return def
 }
+
 // getEnvAlias 兼容性辅助：优先读主 key，空则 fallback 到旧名 alias
 // (2026-07-03: 统一 env var 命名，同时向后兼容旧名)
 func getEnvAlias(key, alias, def string) string {
@@ -185,7 +186,6 @@ func getEnvAlias(key, alias, def string) string {
 	}
 	return def
 }
-
 
 // QuotaToUSD 内部 quota → USD
 func (c *Config) QuotaToUSD(quota int64) float64 {

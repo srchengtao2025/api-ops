@@ -574,7 +574,7 @@ GROUP BY user_id`, strings.Join(placeholders, ","))
 		if r.ReqCnt > 0 {
 			er = float64(r.ErrCnt) / float64(r.ReqCnt)
 		}
-		p95 := int(r.AvgUseMs)  // (2026-07-03 FIX: use MAX not AVG*1000*1.5)
+		p95 := int(r.AvgUseMs) // (2026-07-03 FIX: use MAX not AVG*1000*1.5)
 		if p95 < 100 {
 			p95 = 100
 		}

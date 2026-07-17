@@ -207,7 +207,8 @@ func (s *upstreamSync) syncTokens(ctx context.Context) (int, error) {
 
 // upsertAll 使用 PostgreSQL ON CONFLICT 做真正的 UPSERT
 // (2026-07-03 FIX: 之前 DELETE+INSERT 方案在清空到插入之间有数据空窗期,
-//  且在插入失败时虽回滚但仍有短暂不一致风险)
+//
+//	且在插入失败时虽回滚但仍有短暂不一致风险)
 func upsertAll(db *gorm.DB, model interface{}, rows interface{}, pk string) (int, error) {
 	if db == nil {
 		return 0, fmt.Errorf("db is nil")
