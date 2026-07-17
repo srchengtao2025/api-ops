@@ -1,12 +1,12 @@
-# 同步 SOP: rezeai-ops → api-ops
+# 同步 SOP: <PROD_REPO> → api-ops
 
-> **生产领先**模式（2026-06-15 23:00 决策）。本文是 rezeai-ops 内部维护者向 api-ops 公开仓库推 commit 的标准操作流程。
+> **生产领先**模式（2026-06-15 23:00 决策）。本文是 <PROD_REPO> 内部维护者向 api-ops 公开仓库推 commit 的标准操作流程。
 
 ---
 
 ## 适用场景
 
-你在生产仓库 `rezeai-ops`（内网 GitLab private）改完一批代码、上线验证后，想把**非敏感的代码改进**同步到公开仓库 `api-ops`（GitHub public），让社区享受。
+你在生产仓库 `<PROD_REPO>`（内网 GitLab private）改完一批代码、上线验证后，想把**非敏感的代码改进**同步到公开仓库 `api-ops`（GitHub public），让社区享受。
 
 **不适用**：
 - 内部专属功能（如客户专属对账模板、internal-only 工具）
@@ -27,7 +27,7 @@
 
 ```bash
 # 1. 两套仓库本地都要有
-ls ~/Documents/rezeai-ops/rezeai-ops    # 生产
+ls ~/Documents/<PROD_REPO>/<PROD_REPO>    # 生产
 ls ~/Desktop/api-ops                    # 开源 (snapshot)
 
 # 2. 准备 bot author (api-ops 公开仓库不暴露真实开发邮箱)
@@ -35,8 +35,8 @@ cd ~/Desktop/api-ops
 git config --local user.name  "api-ops-bot"
 git config --local user.email "noreply@api-ops.dev"
 
-# 3. 加 rezeai-ops 作临时 remote (只读 fetch, 不 push)
-git remote add rezeai-prod ~/Documents/rezeai-ops/rezeai-ops
+# 3. 加 <PROD_REPO> 作临时 remote (只读 fetch, 不 push)
+git remote add rezeai-prod ~/Documents/<PROD_REPO>/<PROD_REPO>
 git fetch rezeai-prod main
 
 # 4. 准备"已推送 marker" 文件
@@ -51,8 +51,8 @@ date '+%Y-%m-%d %H:%M:%S' > .last-sync-to-open
 ### Step 1: 列出候选 commit
 
 ```bash
-# 改用 rezeai-ops 仓库视角
-cd ~/Documents/rezeai-ops/rezeai-ops
+# 改用 <PROD_REPO> 仓库视角
+cd ~/Documents/<PROD_REPO>/<PROD_REPO>
 
 # 拉过去 7 天所有 commit (按时间倒序)
 git log --since="7 days ago" --pretty=format:"%H %ai %an <%ae> %s" | head -50
@@ -68,7 +68,7 @@ git log --since="7 days ago" --pretty=format:"%H %ai %an <%ae> %s" | head -50
 | 2 | 含真 token / 密码 / SSH 凭据 / API key | `git show <sha> \| grep -iE "password=\|token=\|api_key\|secret="` | 肉眼搜 "password" "token" "sk-" |
 | 3 | 含真客户名 / 真 vendor / 真模型名 | `git show <sha> \| grep -iE "Phanthy\|dataeyes\|ezmodel\|ccmax\|claudeflare\|aliyun_bailian\|deepseek\|moonshot\|gpt-4o\|claude-3-5-sonnet\|claude-opus"` | 肉眼搜 "Phanthy" "gpt-4o" |
 | 4 | 含真业务数字 (revenue / cost / ratio 跟 5095/2753/45.9% 接近) | `git show <sha> \| grep -E "\\\$5095\|\\\$2753\|45\.9%"` | 肉眼搜 "5095" "2753" "45.9" |
-| 5 | 含真部署路径 | `git show <sha> \| grep -E "/opt/rezeai-ops\|/data/billing-exports"` | 肉眼搜 "/opt/" "/data/" |
+| 5 | 含真部署路径 | `git show <sha> \| grep -E "/opt/<PROD_REPO>\|/data/billing-exports"` | 肉眼搜 "/opt/" "/data/" |
 | 6 | commit message 提到具体客户 / 团队成员名字 | `git log -1 --format=%s <sha> \| grep -E "客户\|user\|@"` | 肉眼过 message |
 | 7 | 仅适用于内部数据量验证 (e.g. 1.9M logs) | 跟原 commit 作者确认 | review PR description |
 
@@ -142,11 +142,11 @@ echo "  ✓ gofmt"
 ```bash
 cd ~/Desktop/api-ops
 
-# 改 docs/CHANGELOG.md, 加新一节 "## [Sync 2026-06-21] from rezeai-ops"
+# 改 docs/CHANGELOG.md, 加新一节 "## [Sync 2026-06-21] from <PROD_REPO>"
 cat >> docs/CHANGELOG.md << 'EOF'
 
-## [Sync 2026-06-21] from rezeai-ops
-手动同步本周 rezeai-ops → api-ops 的非敏感 commit:
+## [Sync 2026-06-21] from <PROD_REPO>
+手动同步本周 <PROD_REPO> → api-ops 的非敏感 commit:
 
 - abc1234 fix(billing/v3): 上游对账 cost 公式补 R1 边界
 - def5678 docs(DESIGN): 补 Q-C11 错误率新口径决策记录
@@ -159,7 +159,7 @@ cat >> docs/CHANGELOG.md << 'EOF'
 EOF
 
 git add docs/CHANGELOG.md
-git commit -m "docs(changelog): 同步 2026-06-15 ~ 2026-06-21 rezeai-ops → api-ops"
+git commit -m "docs(changelog): 同步 2026-06-15 ~ 2026-06-21 <PROD_REPO> → api-ops"
 ```
 
 ### Step 6: push 到 GitHub
@@ -182,16 +182,16 @@ gh run watch
 ### Step 7: 收尾
 
 ```bash
-# 1. 删 rezeai-ops 临时 remote
+# 1. 删 <PROD_REPO> 临时 remote
 cd ~/Desktop/api-ops
 git remote remove rezeai-prod
 
-# 2. 删 rezeai-ops tmp 分支
-cd ~/Documents/rezeai-ops/rezeai-ops
+# 2. 删 <PROD_REPO> tmp 分支
+cd ~/Documents/<PROD_REPO>/<PROD_REPO>
 git branch -D tmp/sync-abc1234
 
-# 3. 在 rezeai-ops 仓库加一行"已同步" marker
-cd ~/Documents/rezeai-ops/rezeai-ops
+# 3. 在 <PROD_REPO> 仓库加一行"已同步" marker
+cd ~/Documents/<PROD_REPO>/<PROD_REPO>
 echo "Last sync to api-ops: $(date '+%Y-%m-%d %H:%M')" >> docs/SYNC-LOG.md
 git add docs/SYNC-LOG.md
 git commit -m "chore(sync): mark 2026-06-21 weekly sync done"
@@ -231,7 +231,7 @@ git push --force
 - 输出 `[PUSH] 3 个 / [SKIP] 2 个 / [MANUAL] 1 个` 报告
 - 跑完生成 `sync-report-YYYY-MM-DD.md` 进 `docs/`
 
-等 rezeai-ops 仓库首批 sync 完成后写。
+等 <PROD_REPO> 仓库首批 sync 完成后写。
 
 ---
 
@@ -240,13 +240,13 @@ git push --force
 - [AGENTS.md §仓库双轨铁律](../AGENTS.md#仓库双轨铁律-2026-06-15-2300-决策-用户拍板) — 决策基线
 - [CONTRIBUTING.md §安全漏洞](../CONTRIBUTING.md#安全漏洞--security-issues) — 出事找谁
 - [CHANGELOG.md](../CHANGELOG.md) — sync 历史
-- [§反向: GitHub PR → rezeai-ops](#反向-github-pr--rezeai-ops-8-步) — 本节, 社区 PR cherry-pick 回生产
+- [§反向: GitHub PR → <PROD_REPO>](#反向-github-pr--<PROD_REPO>-8-步) — 本节, 社区 PR cherry-pick 回生产
 
 ---
 
-## 反向: GitHub PR → rezeai-ops (8 步)
+## 反向: GitHub PR → <PROD_REPO> (8 步)
 
-> **场景**: 社区用户在 api-ops (GitHub public) 提了一个 PR, 觉得有用, 想 cherry-pick 到生产 rezeai-ops 用上.
+> **场景**: 社区用户在 api-ops (GitHub public) 提了一个 PR, 觉得有用, 想 cherry-pick 到生产 <PROD_REPO> 用上.
 >
 > **频率**: 期望 ≤ 1 次 / 季度. 99% 情况我们反向推 commit; 反向 cherry-pick 是少数情况.
 >
@@ -263,11 +263,11 @@ github.com/api-ops/api-ops
        │
        │  PR merged, 在 api-ops main 分支
        ▼
-2) 在 rezeai-ops 仓库开 issue "Cherry-pick #N from api-ops"
+2) 在 <PROD_REPO> 仓库开 issue "Cherry-pick #N from api-ops"
        │
        │  maintainer 拍板
        ▼
-3) git fetch 拉 api-ops main 到 rezeai-ops tmp 分支
+3) git fetch 拉 api-ops main 到 <PROD_REPO> tmp 分支
        │
        │  diff 检查
        ▼
@@ -279,15 +279,15 @@ github.com/api-ops/api-ops
        │
        │  playwright 截图 + 0 console error
        ▼
-6) 合并 rezeai-ops main, 部署到 47.251.85.62 公网
+6) 合并 <PROD_REPO> main, 部署到 <ECS_PUBLIC_IP> 公网
        │
        │  飞书告警监控 24h
        ▼
-7) 在 api-ops PR 加 comment "Cherry-picked to rezeai-ops main as <sha>, deployed at <timestamp>"
+7) 在 api-ops PR 加 comment "Cherry-picked to <PROD_REPO> main as <sha>, deployed at <timestamp>"
        │
        │  关闭 tracking issue
        ▼
-8) 30 天观察期, 出问题 → 立刻回滚 rezeai-ops + 在 api-ops PR 跟 comment
+8) 30 天观察期, 出问题 → 立刻回滚 <PROD_REPO> + 在 api-ops PR 跟 comment
 ```
 
 ### Step 1: review PR, 走 api-ops 标准流程
@@ -302,13 +302,13 @@ PR 进来后, 必走 api-ops 仓库的 PR 模板 checklist:
 
 **特别注意**: 社区 PR 可能用了他们自己的 5 vendor 假名 / 6 模型假名 (跟我们的占位词集一致), 接受. 但**绝不接受**:
 - PR 描述里贴真截图 (可能含真 IP / 真客户名)
-- PR diff 里含 rezeai-ops 仓库内**才有的** 5 vendor 假名之外的占位词 (e.g. `vendor_zeta` 这种没定义的)
+- PR diff 里含 <PROD_REPO> 仓库内**才有的** 5 vendor 假名之外的占位词 (e.g. `vendor_zeta` 这种没定义的)
 - PR 加了 `cmd/server/seed_admin.go` 改 (这是生产专属脚本, 不该从社区进)
 
-### Step 2: 在 rezeai-ops 仓库开 tracking issue
+### Step 2: 在 <PROD_REPO> 仓库开 tracking issue
 
 ```bash
-cd ~/Documents/rezeai-ops/rezeai-ops
+cd ~/Documents/<PROD_REPO>/<PROD_REPO>
 
 # 用 GitLab CLI 创 issue (或网页)
 glab issue create --title "Cherry-pick #N from api-ops: <PR title>" \
@@ -327,14 +327,14 @@ glab issue create --title "Cherry-pick #N from api-ops: <PR title>" \
 - [ ] 影响面: <列出受影响的端点 / SPA / SQL>
 
 ## 部署计划
-- [ ] cherry-pick 到 rezeai-ops main
+- [ ] cherry-pick 到 <PROD_REPO> main
 - [ ] 部署到 staging (10 分钟)
 - [ ] playwright 截图 + 0 console error
-- [ ] 部署到 47.251.85.62 公网
+- [ ] 部署到 <ECS_PUBLIC_IP> 公网
 - [ ] 24h 监控
 
 ## 回滚计划
-- [ ] rezeai-ops git revert <sha>
+- [ ] <PROD_REPO> git revert <sha>
 - [ ] 重新部署前一版本 image
 - [ ] api-ops PR 加 comment 说明
 
@@ -346,7 +346,7 @@ EOF
 ### Step 3: 拉 api-ops main 到 tmp 分支
 
 ```bash
-cd ~/Documents/rezeai-ops/rezeai-ops
+cd ~/Documents/<PROD_REPO>/<PROD_REPO>
 
 # 1. 加 api-ops 作临时 remote (只读 fetch, 不 push)
 git remote add api-open ~/Desktop/api-ops
@@ -361,19 +361,19 @@ git checkout -b tmp/cherry-pick-prN api-open/main
 
 ### Step 4: 真源等价性验证 (5 项)
 
-api-ops 是脱敏镜像, **结构应该跟 rezeai-ops 一样**. 但有 3 个**预期差异** (生产端才有, 镜像里没):
+api-ops 是脱敏镜像, **结构应该跟 <PROD_REPO> 一样**. 但有 3 个**预期差异** (生产端才有, 镜像里没):
 
 | 差异 | 位置 | 期望 |
 |---|---|---|
-| `internal/dal/rezeai_cache.go` 类型名 | rezeai-ops 跟 api-ops 一致 (都是 PascalCase) | 0 差异 |
-| `cmd/server/seed_admin.go` | rezeai-ops 跟 api-ops 一样 (都是 OPS_ADMIN_BOOTSTRAP_PASSWORD 模式) | 0 差异 |
-| `.env` 内容 | rezeai-ops 是真值, api-ops 是 .env.example 占位 | 镜像无 .env, 必然 0 差异 |
+| `internal/dal/rezeai_cache.go` 类型名 | <PROD_REPO> 跟 api-ops 一致 (都是 PascalCase) | 0 差异 |
+| `cmd/server/seed_admin.go` | <PROD_REPO> 跟 api-ops 一样 (都是 OPS_ADMIN_BOOTSTRAP_PASSWORD 模式) | 0 差异 |
+| `.env` 内容 | <PROD_REPO> 是真值, api-ops 是 .env.example 占位 | 镜像无 .env, 必然 0 差异 |
 
 **5 项必查**:
 
 ```bash
 # 1. 文件路径全部一致
-diff -r --brief ~/Documents/rezeai-ops/rezeai-ops/ ~/Desktop/api-ops/ | grep -v "^\.git/\|^\.env$\|web/node_modules\|web/dist" | head -20
+diff -r --brief ~/Documents/<PROD_REPO>/<PROD_REPO>/ ~/Desktop/api-ops/ | grep -v "^\.git/\|^\.env$\|web/node_modules\|web/dist" | head -20
 echo "  (空 = 路径一致 ✅)"
 
 # 2. 占位词覆盖率 (确保 PR 用了 5 vendor 假名集)
@@ -394,10 +394,10 @@ docker run --rm -v "$PWD":/src -w /src -e GOFLAGS=-mod=mod golang:1.22-alpine \
 echo "  ✅ test"
 ```
 
-### Step 5: cherry-pick 到 rezeai-ops main
+### Step 5: cherry-pick 到 <PROD_REPO> main
 
 ```bash
-cd ~/Documents/rezeai-ops/rezeai-ops
+cd ~/Documents/<PROD_REPO>/<PROD_REPO>
 
 # 1. 切回 main
 git checkout main
@@ -406,7 +406,7 @@ git checkout main
 git cherry-pick api-open/main..tmp/cherry-pick-prN
 
 # 3. 解决冲突 (罕见, 但可能 e.g. CHANGELOG.md 两边都改了)
-#    用 --ours / --theirs 策略, 优先 rezeai-ops 版本 (生产优先)
+#    用 --ours / --theirs 策略, 优先 <PROD_REPO> 版本 (生产优先)
 
 # 4. 改 commit message, 标 source
 #    原 message: "feat(billing/v5): 季度对账导出"
@@ -417,19 +417,19 @@ git cherry-pick api-open/main..tmp/cherry-pick-prN
 
 ```bash
 # 1. 部署到 staging (跟生产同 image, 端口 8089, 不同 domain)
-docker buildx build --platform linux/amd64 -t rezeai-ops:staging . --load
-docker save rezeai-ops:staging | gzip > /tmp/rezeai-staging.tar.gz
-sshpass -p '<pwd>' scp /tmp/rezeai-staging.tar.gz root@47.251.85.62:/tmp/
-ssh root@47.251.85.62 'docker load -i /tmp/rezeai-staging.tar.gz && \
+docker buildx build --platform linux/amd64 -t <PROD_REPO>:staging . --load
+docker save <PROD_REPO>:staging | gzip > /tmp/rezeai-staging.tar.gz
+sshpass -p '<pwd>' scp /tmp/rezeai-staging.tar.gz root@<ECS_PUBLIC_IP>:/tmp/
+ssh root@<ECS_PUBLIC_IP> 'docker load -i /tmp/rezeai-staging.tar.gz && \
   docker compose -f docker-compose.staging.yml up -d api'
 
 # 2. playwright 截图 + 0 console error
-playwright-mcp screenshot http://47.251.85.62:8089/ --output=/tmp/staging.png
+playwright-mcp screenshot http://<ECS_PUBLIC_IP>:8089/ --output=/tmp/staging.png
 # 肉眼对 5 个页面: dashboard / customers / upstream / v4 / monitor
 # console.error 必 0 条
 
 # 3. 跑 curl 200 测受影响的端点
-ssh root@47.251.85.62 'docker exec rezeai-ops-api-staging \
+ssh root@<ECS_PUBLIC_IP> 'docker exec <PROD_REPO>-api-staging \
   curl -s -o /dev/null -w "%{http_code}\n" \
   http://localhost:8088/api/billing/v5/quarterly-overview'
 # 期望 200
@@ -438,7 +438,7 @@ ssh root@47.251.85.62 'docker exec rezeai-ops-api-staging \
 ### Step 7: 部署到公网 + 飞书告警
 
 ```bash
-# 1. 推 rezeai-ops main (本地不直接 push, 走内网 GitLab)
+# 1. 推 <PROD_REPO> main (本地不直接 push, 走内网 GitLab)
 git push origin main
 
 # 2. CI (内网 GitLab runner) 自动 build + 部署
@@ -449,7 +449,7 @@ git push origin main
 # - 重点看: 新代码的端点 latency / 错误率 / DB 慢查询
 
 # 4. 在 api-ops PR 加 comment
-gh pr comment N --body "Cherry-picked to rezeai-ops main as <sha>, deployed at <ts>. 24h 监控中. 出问题会回滚并在此 comment."
+gh pr comment N --body "Cherry-picked to <PROD_REPO> main as <sha>, deployed at <ts>. 24h 监控中. 出问题会回滚并在此 comment."
 
 # 5. 关闭 GitLab issue
 glab issue close <issue-id> --comment "Cherry-pick #N done, deployed at <ts>, monitoring 24h"
@@ -465,7 +465,7 @@ glab issue close <issue-id> --comment "Cherry-pick #N done, deployed at <ts>, mo
 #    - 内存 / CPU 占用
 
 # 2. 出问题立刻回滚:
-cd ~/Documents/rezeai-ops/rezeai-ops
+cd ~/Documents/<PROD_REPO>/<PROD_REPO>
 git revert <cherry-pick-sha>
 git push origin main
 # CI 自动回滚部署
@@ -487,8 +487,8 @@ gh pr comment N --body "✅ Cherry-pick stable for 30 days in production. 永久
 
 ### 反向 cherry-pick 反模式 (禁止)
 
-- ❌ 直接 `git pull api-open main` 到 rezeai-ops (会把脱敏改动一并拉过来)
-- ❌ 在 rezeai-ops 仓库 `git remote add` 完不删, 留下 "公开仓库 remote" 历史痕迹
+- ❌ 直接 `git pull api-open main` 到 <PROD_REPO> (会把脱敏改动一并拉过来)
+- ❌ 在 <PROD_REPO> 仓库 `git remote add` 完不删, 留下 "公开仓库 remote" 历史痕迹
 - ❌ cherry-pick 含 `seed_admin.go` 改的 PR (生产专属脚本)
 - ❌ cherry-pick 含新 `migrations/*.sql` 不先在 staging 跑过
 - ❌ cherry-pick 完不更新 `docs/CHANGELOG.md` (生产 CHANGELOG 跟开源 CHANGELOG 必同步)
@@ -514,4 +514,4 @@ gh pr comment N --body "✅ Cherry-pick stable for 30 days in production. 永久
 - 输出报告
 - 手工确认后 cherry-pick
 
-等 rezeai-ops 仓库首批正向 sync + 反向 cherry-pick 跑过后再写.
+等 <PROD_REPO> 仓库首批正向 sync + 反向 cherry-pick 跑过后再写.

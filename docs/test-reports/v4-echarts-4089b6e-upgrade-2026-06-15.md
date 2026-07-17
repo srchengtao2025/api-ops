@@ -77,7 +77,7 @@ dist/assets/index-DI_zXR6L.js   2,244.90 kB │ gzip: 731.22 kB
 ## playwright headless chrome 验证
 
 **脚本**: `/tmp/v4-echarts-verify.cjs` (用系统 Chrome `/Applications/Google Chrome.app`)
-**截图路径**: `/Users/abnercheng/Documents/api-ops/api-ops/docs/screenshots/2026-06-15-v4-echarts-{trend,users,vendors,models}.png`
+**截图路径**: `/Users/<USER>/Documents/api-ops/api-ops/docs/screenshots/2026-06-15-v4-echarts-{trend,users,vendors,models}.png`
 **viewport**: 1440x900
 
 | 截图 | 状态 |
@@ -116,7 +116,7 @@ dist/assets/index-DI_zXR6L.js   2,244.90 kB │ gzip: 731.22 kB
 
 - **公网部署**: 本任务**未部署** (scope 外), 用户决策:
   ```bash
-  cd /Users/abnercheng/Documents/api-ops/api-ops/web
+  cd /Users/<USER>/Documents/api-ops/api-ops/web
   npm run build  # 已 0 error
   # 把 dist 烤进 image (Dockerfile 已 COPY web/dist → /app/web/dist/)
   # docker buildx build --platform linux/amd64 -t api-ops:latest --load .
