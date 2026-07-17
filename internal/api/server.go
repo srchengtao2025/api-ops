@@ -5,6 +5,7 @@ package api
 import (
 	"crypto/subtle"
 	"errors"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -458,7 +459,11 @@ func parseUint(s string) uint64 {
 	if s == "" {
 		return 0
 	}
-	v, _ := strconv.ParseUint(s, 10, 64)
+	v, err := strconv.ParseUint(s, 10, 64)
+	if err != nil {
+		log.Printf("[api] parseUint(%q) failed: %v", s, err)
+		return 0
+	}
 	return v
 }
 
@@ -466,7 +471,11 @@ func parseInt(s string) int {
 	if s == "" {
 		return 0
 	}
-	v, _ := strconv.Atoi(s)
+	v, err := strconv.Atoi(s)
+	if err != nil {
+		log.Printf("[api] parseInt(%q) failed: %v", s, err)
+		return 0
+	}
 	return v
 }
 
@@ -474,7 +483,11 @@ func parseInt64(s string) int64 {
 	if s == "" {
 		return 0
 	}
-	v, _ := strconv.ParseInt(s, 10, 64)
+	v, err := strconv.ParseInt(s, 10, 64)
+	if err != nil {
+		log.Printf("[api] parseInt64(%q) failed: %v", s, err)
+		return 0
+	}
 	return v
 }
 

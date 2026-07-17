@@ -139,6 +139,24 @@ type LogsStat struct {
 //   - tokenName      string
 //   - channel        int
 //   - group          string
+
+// doWithRetry GET 请求带重试（最多 3 次，指数退避：1s/2s/4s）
+func (c *Client) doWithRetry(ctx context.Context, path string, query url.Values, out interface{}) error {
+	var lastErr error
+	for attempt := 1; attempt <= 3; attempt++ {
+		err := c.Do(ctx, path, query, out)
+		if err == nil {
+			return nil
+		}
+		lastErr = err
+		if attempt < 3 {
+			delay := time.Duration(1<<uint(attempt-1)) * time.Second
+			time.Sleep(delay)
+		}
+	}
+	return fmt.Errorf("retry exhausted after 3 attempts: %w", lastErr)
+}
+
 func (c *Client) GetLogsStat(ctx context.Context, logType int, startTS, endTS int64, filters ...StatFilter) (LogsStat, error) {
 	q := url.Values{}
 	if logType > 0 {
@@ -258,7 +276,8 @@ func (c *Client) listChannelsPage(ctx context.Context, page, pageSize int) ([]Ch
 	q.Set("p", strconv.Itoa(page))
 	q.Set("page_size", strconv.Itoa(pageSize))
 	var resp PageResp[ChannelResp]
-	if err := c.Do(ctx, "/api/channel/", q, &resp); err != nil {
+	// (2026-07-03: 使用重试提高容错)
+	if err := c.doWithRetry(ctx, "/api/channel/", q, &resp); err != nil {
 		return nil, 0, err
 	}
 	return resp.Data.Items, resp.Data.Total, nil
@@ -369,7 +388,8 @@ func (c *Client) listUsersPage(ctx context.Context, page, pageSize int) ([]UserR
 	q.Set("p", strconv.Itoa(page))
 	q.Set("page_size", strconv.Itoa(pageSize))
 	var resp PageResp[UserResp]
-	if err := c.Do(ctx, "/api/user/", q, &resp); err != nil {
+	// (2026-07-03: 使用重试提高容错)
+	if err := c.doWithRetry(ctx, "/api/user/", q, &resp); err != nil {
 		return nil, 0, err
 	}
 	return resp.Data.Items, resp.Data.Total, nil
@@ -425,7 +445,8 @@ func (c *Client) listTokensPage(ctx context.Context, page, pageSize int) ([]Toke
 	q.Set("p", strconv.Itoa(page))
 	q.Set("page_size", strconv.Itoa(pageSize))
 	var resp PageResp[TokenResp]
-	if err := c.Do(ctx, "/api/token/", q, &resp); err != nil {
+	// (2026-07-03: 使用重试提高容错)
+	if err := c.doWithRetry(ctx, "/api/token/", q, &resp); err != nil {
 		return nil, 0, err
 	}
 	return resp.Data.Items, resp.Data.Total, nil

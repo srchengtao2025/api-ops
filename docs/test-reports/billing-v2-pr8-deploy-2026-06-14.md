@@ -9,7 +9,7 @@
 
 ## TL;DR
 
-账单 v2 8 PR 全部完成。远端 ECS api-ops.example.com:8091 部署成功, 6 端点端到端跑通, 真实数据 (user_alpha 2026-05 月账单 $70,226.82) 校验正确。
+账单 v2 8 PR 全部完成。远端 ECS api-ops.example.com:8091 部署成功, 6 端点端到端跑通, 真实数据 (user_alpha 2026-05 月账单 <USD_AMOUNT>) 校验正确。
 
 | 检查项 | 状态 | 详情 |
 |---|---|---|
@@ -22,7 +22,7 @@
 | 6 端点公网 | ✅ | 6 端点全过真实数据 |
 | ZIP 内容 | ✅ | README + HTML (9.9KB) + XLSX (9.5KB OOXML) |
 | XLSX sharedStrings | ✅ | 7 列表头单字段 `缓存 tokens` |
-| HTML 合计行 | ✅ | 1,002,849 调用 / 101.7亿输入 / 12.5亿 cache / $70,226.82 |
+| HTML 合计行 | ✅ | <NUM_CALLS> 调用 / <NUM_INPUT_TOKENS>输入 / <NUM_CACHE_TOKENS> cache / <USD_AMOUNT> |
 
 ---
 
@@ -320,15 +320,15 @@ upstream 客户对账单
 ```html
 <tr class="total">
   <td>合计</td>
-  <td>1,002,849</td>
+  <td><NUM_CALLS></td>
   <td>10,170,088,714</td>
   <td>12,615,368,816</td>
   <td>1,249,816,309</td>   ← cache tokens
-  <td>$70,226.82</td>      ← revenue_usd
+  <td><USD_AMOUNT></td>      ← revenue_usd
 </tr>
 ```
 
-**校验**: 1,002,849 调用 / 101.7亿输入 / 126.2亿输出 / **12.5亿 cache** / **$70,226.82 USD** ✅
+**校验**: <NUM_CALLS> 调用 / <NUM_INPUT_TOKENS>输入 / <NUM_OUTPUT_TOKENS>输出 / **<NUM_CACHE_TOKENS> cache** / **<USD_AMOUNT> USD** ✅
 
 ---
 

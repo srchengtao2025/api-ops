@@ -27,6 +27,7 @@ import (
 	"github.com/api-ops/api-ops/internal/dal"
 	"github.com/api-ops/api-ops/internal/newapi_client"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 // DefaultInterval 默认同步间隔
@@ -204,33 +205,23 @@ func (s *upstreamSync) syncTokens(ctx context.Context) (int, error) {
 	return upsertAll(dal.OPS, &dal.UpstreamTokenCache{}, rows, "id")
 }
 
-// upsertAll 通用 upsert：清空表 + 批量插入（数据量小，性能 OK）
-// 数据量（channels=78, users=107, tokens=2）都很小，全量替换比增量 diff 简单可靠
+// upsertAll 使用 PostgreSQL ON CONFLICT 做真正的 UPSERT
+// (2026-07-03 FIX: 之前 DELETE+INSERT 方案在清空到插入之间有数据空窗期,
+//  且在插入失败时虽回滚但仍有短暂不一致风险)
 func upsertAll(db *gorm.DB, model interface{}, rows interface{}, pk string) (int, error) {
 	if db == nil {
 		return 0, fmt.Errorf("db is nil")
 	}
-	tx := db.Begin()
-	if tx.Error != nil {
-		return 0, tx.Error
+	// ON CONFLICT DO UPDATE SET all columns = EXCLUDED
+	// 利用 PG 的原子 UPSERT，无空窗期，性能也更好
+	err := db.Clauses(clause.OnConflict{
+		Columns:   []clause.Column{{Name: pk}},
+		UpdateAll: true,
+	}).Create(rows).Error
+	if err != nil {
+		return 0, fmt.Errorf("upsert: %w", err)
 	}
-	// 先清空
-	if err := tx.Where("1=1").Delete(model).Error; err != nil {
-		tx.Rollback()
-		return 0, fmt.Errorf("delete old: %w", err)
-	}
-	// 批量插入
-	if err := tx.Create(rows).Error; err != nil {
-		tx.Rollback()
-		return 0, fmt.Errorf("insert: %w", err)
-	}
-	if err := tx.Commit().Error; err != nil {
-		return 0, err
-	}
-	// 统计行数（reflect 看 rows 长度）
-	count := reflectLen(rows)
-	_ = pk
-	return count, nil
+	return reflectLen(rows), nil
 }
 
 func reflectLen(v interface{}) int {

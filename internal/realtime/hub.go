@@ -421,7 +421,7 @@ type aggRow struct {
 	ReqCnt   int64
 	ErrCnt   int64
 	Tokens   int64
-	AvgUseMs float64
+	AvgUseMs float64 // response time ms (now MAX not AVG in SQL, keeping field name for backward compat)
 }
 
 // aggregateLogs 通用聚合：scope = "" (global) | "channel:<id>" | "user:<id>"
@@ -434,7 +434,7 @@ func aggregateLogs(ctx context.Context, scope string, startTS, endTS int64, extr
 	sqlStr := `SELECT COUNT(*) AS req_cnt,
        SUM(CASE WHEN type = ? THEN 1 ELSE 0 END) AS err_cnt,
        COALESCE(SUM(prompt_tokens + completion_tokens), 0) AS tokens,
-       COALESCE(AVG(use_time), 0) AS avg_use_ms
+       COALESCE(MAX(use_time), 0) AS max_use_ms
 FROM logs WHERE created_at >= ? AND created_at < ?`
 	args := []interface{}{dal.LogTypeError, startTS, endTS}
 	switch {
@@ -455,7 +455,8 @@ FROM logs WHERE created_at >= ? AND created_at < ?`
 	if err := dal.RoDB().WithContext(ctx).Raw(sqlStr, args...).Scan(&r).Error; err != nil {
 		return TickPayload{}, false
 	}
-	p95 := int(r.AvgUseMs * 1000 * 1.5)
+	// (2026-07-03 FIX: 之前 AVG*1000*1.5 不是真正的 P95, 改用 MAX 近似)
+	p95 := int(r.AvgUseMs)
 	if p95 < 100 {
 		p95 = 100
 	}
@@ -494,7 +495,7 @@ func aggregateChannelsBatch(ctx context.Context, chs []dal.ChannelMirror, startT
        COUNT(*) AS req_cnt,
        SUM(CASE WHEN type = ? THEN 1 ELSE 0 END) AS err_cnt,
        COALESCE(SUM(prompt_tokens + completion_tokens), 0) AS tokens,
-       COALESCE(AVG(use_time), 0) AS avg_use_ms
+       COALESCE(MAX(use_time), 0) AS max_use_ms
 FROM logs WHERE created_at >= ? AND created_at < ? AND channel_id IN (%s)
 GROUP BY channel_id`, strings.Join(placeholders, ","))
 
@@ -518,7 +519,8 @@ GROUP BY channel_id`, strings.Join(placeholders, ","))
 		if r.ReqCnt > 0 {
 			er = float64(r.ErrCnt) / float64(r.ReqCnt)
 		}
-		p95 := int(r.AvgUseMs * 1000 * 1.5)
+		// (2026-07-03 FIX: 之前 AVG*1000*1.5 不是真正的 P95, 改用 MAX 近似)
+		p95 := int(r.AvgUseMs)
 		if p95 < 100 {
 			p95 = 100
 		}
@@ -548,7 +550,7 @@ func aggregateUsersBatch(ctx context.Context, uids []uint64, startTS, endTS int6
        COUNT(*) AS req_cnt,
        SUM(CASE WHEN type = ? THEN 1 ELSE 0 END) AS err_cnt,
        COALESCE(SUM(prompt_tokens + completion_tokens), 0) AS tokens,
-       COALESCE(AVG(use_time), 0) AS avg_use_ms
+       COALESCE(MAX(use_time), 0) AS max_use_ms
 FROM logs WHERE created_at >= ? AND created_at < ? AND user_id IN (%s)
 GROUP BY user_id`, strings.Join(placeholders, ","))
 
@@ -557,7 +559,7 @@ GROUP BY user_id`, strings.Join(placeholders, ","))
 		ReqCnt   int64   `gorm:"column:req_cnt"`
 		ErrCnt   int64   `gorm:"column:err_cnt"`
 		Tokens   int64   `gorm:"column:tokens"`
-		AvgUseMs float64 `gorm:"column:avg_use_ms"`
+		AvgUseMs float64 // response time ms (now MAX not AVG in SQL, keeping field name for backward compat) `gorm:"column:avg_use_ms"`
 	}
 	var rows []row
 	if err := dal.RoDB().WithContext(ctx).Raw(sqlStr, args...).Scan(&rows).Error; err != nil {
@@ -572,7 +574,7 @@ GROUP BY user_id`, strings.Join(placeholders, ","))
 		if r.ReqCnt > 0 {
 			er = float64(r.ErrCnt) / float64(r.ReqCnt)
 		}
-		p95 := int(r.AvgUseMs * 1000 * 1.5)
+		p95 := int(r.AvgUseMs)  // (2026-07-03 FIX: use MAX not AVG*1000*1.5)
 		if p95 < 100 {
 			p95 = 100
 		}

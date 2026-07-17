@@ -83,6 +83,7 @@ func initRO(cfg *config.Config) error {
 	sqlDB.SetMaxIdleConns(10)
 	sqlDB.SetMaxOpenConns(50)
 	sqlDB.SetConnMaxLifetime(30 * time.Minute)
+	sqlDB.SetConnMaxIdleTime(5 * time.Minute) // (2026-07-03: 防止空闲连接被 RDS 超时断开)
 
 	RO = db
 	log.Println("[dal] upstream ro db connected")
@@ -107,6 +108,7 @@ func initOPS(cfg *config.Config) error {
 	sqlDB.SetMaxIdleConns(10)
 	sqlDB.SetMaxOpenConns(50)
 	sqlDB.SetConnMaxLifetime(30 * time.Minute)
+	sqlDB.SetConnMaxIdleTime(5 * time.Minute) // (2026-07-03: 防止空闲连接被 RDS 超时断开)
 
 	OPS = db
 	log.Println("[dal] ops db connected")

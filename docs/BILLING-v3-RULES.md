@@ -213,7 +213,7 @@ user_alpha (uid=47, group=mu-aws) 5 月 1 日调 ch-2 (provider_alpha, discount=
   profit_margin = ($0.1 - $0.0375) / $0.0375 = 1.667 = 166.7%
 ```
 
-5 月总账单: user_alpha 1,002,849 调用, $70,226.82 消耗, ~$17,557 成本 (按 0.24 平均), ~$52,669 毛利, 300% 利润率
+5 月总账单: user_alpha <NUM_CALLS> 调用, <USD_AMOUNT> 消耗, ~$17,557 成本 (按 0.24 平均), ~$52,669 毛利, 300% 利润率
 
 ### 2.4 公式简化版 (overview 端点)
 

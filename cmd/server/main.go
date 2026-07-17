@@ -11,7 +11,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/api-ops/api-ops/internal/ai"
 	kbbatch "github.com/api-ops/api-ops/internal/ai/kb"
 	"github.com/api-ops/api-ops/internal/api"
 	"github.com/api-ops/api-ops/internal/audit"
@@ -133,74 +132,12 @@ func main() {
 	}
 
 	// P1 监控调度器：每 1min 跑 channel_health_5min 聚合 + 告警规则评估
-	// (2026-06-15 PR: 之前漏启导致 health/alerts 永远 0 数据, SPA 监控页空)
+	// P3 AI 调度器：每 1h 聚类 + 每日 02:30 日报 + 每周一 09:00 周报
+	// 统一走 scheduler.Run()，避免 main.go 中重复启动 AI goroutine
+	// (2026-07-03 FIX: 之前 main.go 和 scheduler.go 各有一套 AI goroutine,
+	//  导致 ClusterOneHour/GenerateErrorDailyReport 被调用两次, 浪费 LLM 费用)
 	scheduler.Run(rootCtx, cfg)
-	log.Println("[main] P1 monitor scheduler started (1min tick: 5min aggregate + alert eval)")
-
-	// P3 AI scheduler：5min 1h 错误聚类 + 每日 9:00 错误日报（owner 补）
-	// 1) 5min tick 聚类：把最近 1h 的 logs 归一化入 ai_error_clusters
-	go func() {
-		t := time.NewTicker(5 * time.Minute)
-		defer t.Stop()
-		// 启动后 30s 先跑一次（等 KB + notifier 启动完毕）
-		time.AfterFunc(30*time.Second, func() {
-			if n, err := ai.ClusterOneHour(rootCtx); err != nil {
-				log.Printf("[ai.scheduler] initial cluster failed: %v", err)
-			} else {
-				log.Printf("[ai.scheduler] initial cluster upserted=%d", n)
-			}
-		})
-		for {
-			select {
-			case <-rootCtx.Done():
-				log.Println("[ai.scheduler] cluster tick stopped")
-				return
-			case <-t.C:
-				if n, err := ai.ClusterOneHour(rootCtx); err != nil {
-					log.Printf("[ai.scheduler] cluster failed: %v", err)
-				} else if n > 0 {
-					log.Printf("[ai.scheduler] cluster upserted=%d", n)
-				}
-			}
-		}
-	}()
-
-	// 2) 每日 9:00 跑错误日报（先用 loop 每分钟检查时:分，演示阶段用更短间隔 demo-friendly）
-	go func() {
-		t := time.NewTicker(1 * time.Minute)
-		defer t.Stop()
-		// 启动后 60s 先跑一次（让 cluster + KB 跑稳）
-		time.AfterFunc(60*time.Second, func() {
-			if rep, err := ai.GenerateErrorDailyReport(rootCtx, time.Now().Unix()); err != nil {
-				log.Printf("[ai.scheduler] initial daily report failed: %v", err)
-			} else {
-				log.Printf("[ai.scheduler] initial daily report id=%d title=%q", rep.ID, rep.Title)
-			}
-		})
-		lastRunDate := ""
-		for {
-			select {
-			case <-rootCtx.Done():
-				log.Println("[ai.scheduler] daily report tick stopped")
-				return
-			case <-t.C:
-				now := time.Now()
-				if now.Hour() == 9 && now.Minute() == 0 {
-					today := now.Format("2006-01-02")
-					if today == lastRunDate {
-						continue
-					}
-					lastRunDate = today
-					if rep, err := ai.GenerateErrorDailyReport(rootCtx, now.Unix()); err != nil {
-						log.Printf("[ai.scheduler] daily report failed: %v", err)
-					} else {
-						log.Printf("[ai.scheduler] daily report id=%d title=%q", rep.ID, rep.Title)
-					}
-				}
-			}
-		}
-	}()
-	log.Println("[main] P3 AI scheduler started (cluster=5min, daily=09:00)")
+	log.Println("[main] P1 monitor + P3 AI scheduler started (1min tick: 5min aggregate + alert eval + AI cluster/daily/weekly)")
 
 	httpSrv := &http.Server{
 		Addr:              ":" + cfg.Port,

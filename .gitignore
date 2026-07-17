@@ -34,3 +34,9 @@ web/.env.local
 *.local
 tmp/
 temp/
+## build artifacts
+server
+*.exe
+*.test
+*.out
+coverage.*

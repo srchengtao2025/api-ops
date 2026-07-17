@@ -13,7 +13,7 @@
 | 维度 | 状态 |
 |---|---|
 | **上线端点** | ✅ **6 端点全部上线** (PR #1-#8, 2026-06-14 完成) |
-| **公网验证** | ✅ 6 端点 200, 真实数据 user_alpha 5 月 1,002,849 调用 / $70,226.82 USD |
+| **公网验证** | ✅ 6 端点 200, 真实数据 user_alpha 5 月 <NUM_CALLS> 调用 / <USD_AMOUNT> USD |
 | **镜像** | `api-ops:latest` (commit `f6dceb0`) |
 | **业务规则** | R1-R5 全复用 v1, 0 业务断点 |
 | **后续演进** | ✅ v2 完成后, v3 上游对账复用 v2 worker (kind='upstream'), 0 改动 v2 代码 |
@@ -513,7 +513,7 @@ candidates := []string{
 - 任务 6 秒内 success, progress 100, file_size 11.6KB
 - ZIP 解压: README + statement.html (9.9KB) + statement.xlsx (9.5KB OOXML)
 - XLSX sharedStrings 校验: 7 列表头单字段 `缓存 tokens`
-- HTML 合计行: 1,002,849 调用 / 101.7亿输入 / 126.2亿输出 / 12.5亿 cache / **$70,226.82 USD**
+- HTML 合计行: <NUM_CALLS> 调用 / <NUM_INPUT_TOKENS>输入 / <NUM_OUTPUT_TOKENS>输出 / <NUM_CACHE_TOKENS> cache / **<USD_AMOUNT> USD**
 
 详细报告: `docs/test-reports/billing-v2-pr8-deploy-2026-06-14.md`
 

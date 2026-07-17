@@ -655,11 +655,9 @@ func stripPrefix(s, prefix string) string {
 	return strings.TrimPrefix(strings.TrimSpace(s), prefix)
 }
 
-// resolveFiredAlerts 把条件已不再满足的 firing 告警 → resolved
-// 简化版：仅在 eval 后无新触发时按 status+firing 列表逐条检查
-// 这里只做最小实现：定期扫描 status=firing 的告警，重新跑对应规则的 evaluator，
-// 若对应 metric 已恢复，则置为 resolved。
-// 完整版需要保留 rule_type+subject_id 的索引（本任务范围内用最小实现）
+// resolveFiredAlerts 重新评估每个 firing 告警，若条件已恢复则标记 resolved
+// (2026-07-03 FIX: 之前只用 30min 超时，不检查实际 metric 是否恢复。
+//  现在对每种规则类型重新跑 evaluator 检查，只有真正恢复才 resolve)
 func resolveFiredAlerts(ctx context.Context) error {
 	rows, _, err := dal.ListAlertHistories(ctx, dal.AlertHistoryQuery{
 		Status: "firing", Limit: 500,
@@ -668,14 +666,110 @@ func resolveFiredAlerts(ctx context.Context) error {
 		return err
 	}
 	for _, h := range rows {
-		// 简化：调用对应 evaluator 不再 fire → 标记 resolved
-		// 这里我们用时间窗（30min 内未重复触发 = resolved）做兜底
-		// 实际规则应按 subject_type 重新跑 metrics —— 本期时间窗近似即可
-		if h.CreatedAt.Before(time.Now().Add(-30 * time.Minute)) {
+		resolved := checkAlertResolved(ctx, &h)
+		if resolved {
 			_ = dal.UpdateAlertHistoryStatus(ctx, h.ID, "resolved", "auto-resolver")
 		}
 	}
 	return nil
+}
+
+// checkAlertResolved 针对单个告警重新评估条件是否已恢复
+func checkAlertResolved(ctx context.Context, h *dal.AlertHistory) bool {
+	switch {
+	case h.SubjectType == "channel" && strings.Contains(h.RuleName, "错误率"):
+		return checkChannelErrorRateResolved(ctx, h)
+	case h.SubjectType == "channel" && strings.Contains(h.RuleName, "余额"):
+		return checkBalanceResolved(ctx, h)
+	case h.SubjectType == "channel" && strings.Contains(h.RuleName, "P95"):
+		return checkP95Resolved(ctx, h)
+	case h.SubjectType == "user":
+		return checkUserErrorsResolved(ctx, h)
+	default:
+		// 未知类型：超过 1 小时后兜底 resolve（保留旧行为的安全网）
+		return h.CreatedAt.Before(time.Now().Add(-1 * time.Hour))
+	}
+}
+
+func checkChannelErrorRateResolved(ctx context.Context, h *dal.AlertHistory) bool {
+	rows, err := dal.ListLatestChannelHealth(ctx)
+	if err != nil {
+		return false
+	}
+	chID, _ := strconv.Atoi(h.SubjectID)
+	for _, r := range rows {
+		if r.ChannelID == chID {
+			// 错误率 < 20% 即恢复
+			return r.ErrorRate < 0.20
+		}
+	}
+	// 找不到该 channel → 可能已删除，标记 resolved
+	return true
+}
+
+func checkBalanceResolved(ctx context.Context, h *dal.AlertHistory) bool {
+	rows, err := dal.ListLatestChannelHealth(ctx)
+	if err != nil {
+		return false
+	}
+	chID, _ := strconv.Atoi(h.SubjectID)
+	for _, r := range rows {
+		if r.ChannelID == chID {
+			// 余额 >= $5.0 即恢复
+			return r.Balance >= 5.0
+		}
+	}
+	return true
+}
+
+func checkP95Resolved(ctx context.Context, h *dal.AlertHistory) bool {
+	// 获取 baseline 和最新 p95
+	now := time.Now().Unix()
+	baselineRows, err := dal.ListChannelHealth1h(ctx, dal.ChannelHealthQuery{
+		StartTS: now - 24*3600, EndTS: now,
+	})
+	if err != nil {
+		return false
+	}
+	chID, _ := strconv.Atoi(h.SubjectID)
+	var baseAvg float64
+	var count int
+	for _, r := range baselineRows {
+		if r.ChannelID == chID && r.P95LatencyMs > 0 {
+			baseAvg += float64(r.P95LatencyMs)
+			count++
+		}
+	}
+	if count > 0 {
+		baseAvg /= float64(count)
+	}
+	latest, err := dal.ListLatestChannelHealth(ctx)
+	if err != nil {
+		return false
+	}
+	for _, r := range latest {
+		if r.ChannelID == chID {
+			// p95 < baseline * 1.5 即恢复
+			if baseAvg > 0 {
+				return float64(r.P95LatencyMs) <= baseAvg*1.5
+			}
+			return true
+		}
+	}
+	return true
+}
+
+func checkUserErrorsResolved(ctx context.Context, h *dal.AlertHistory) bool {
+	// 检查该用户最近 5min 是否还有大量错误
+	endTS := time.Now().Unix()
+	startTS := endTS - 5*60
+	var errCount int64
+	dal.RoDB().WithContext(ctx).Raw(
+		"SELECT COUNT(*) FROM logs WHERE created_at >= ? AND created_at < ? AND type = ? AND user_id = ?",
+		startTS, endTS, dal.LogTypeError, h.SubjectID,
+	).Scan(&errCount)
+	// 5min 内错误数 < 3 即恢复
+	return errCount < 3
 }
 
 // ===== Handler 层调用的 service-level 操作 =====
