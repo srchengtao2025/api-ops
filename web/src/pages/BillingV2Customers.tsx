@@ -8,11 +8,12 @@
 //
 // 替代: 现有 /billing/customer (v1, 6 端点) 暂保留 6 个月 (RFC §7)
 import { useEffect, useState } from 'react'
-import { Button, Card, Modal, Space, Table, Tag, Tooltip, Checkbox, message } from 'antd'
+import { Button, Card, Modal, Space, Table, Tag, Tooltip, Checkbox, DatePicker, message } from 'antd'
 import { ReloadOutlined, DownloadOutlined, ClockCircleOutlined, CheckCircleOutlined, CloseCircleOutlined, FileZipOutlined } from '@ant-design/icons'
 import { useNavigate } from 'react-router-dom'
 import { api, V2CustomerMonthItem, V2ExportTask } from '../api'
 import { getUser } from '../api'
+import dayjs, { Dayjs } from 'dayjs'
 
 export default function BillingV2Customers() {
   const [loading, setLoading] = useState(false)
@@ -23,6 +24,11 @@ export default function BillingV2Customers() {
   const [formats, setFormats] = useState<string[]>(['html', 'xlsx'])
   const [recentTask, setRecentTask] = useState<V2ExportTask | null>(null)
   const [submitting, setSubmitting] = useState(false)
+  const [periodOpen, setPeriodOpen] = useState(false)
+  const [periodUser, setPeriodUser] = useState<V2CustomerMonthItem | null>(null)
+  const [periodRange, setPeriodRange] = useState<[Dayjs | null, Dayjs | null]>([null, null])
+  const [periodFormats, setPeriodFormats] = useState<string[]>(['html', 'xlsx'])
+  const [periodSubmitting, setPeriodSubmitting] = useState(false)
   const me = getUser()
   const canExport = me?.role === 'admin' || me?.role === 'finance'
   const navigate = useNavigate()
@@ -83,6 +89,48 @@ export default function BillingV2Customers() {
     } catch (e: any) {
       const msg = e?.response?.data?.error?.message || e?.message
       message.error('创建失败: ' + msg)
+    }
+  }
+
+  const onOpenPeriodExport = (row: V2CustomerMonthItem) => {
+    setPeriodUser(row)
+    setPeriodRange([null, null])
+    setPeriodFormats(['html', 'xlsx'])
+    setPeriodOpen(true)
+  }
+
+  const onSubmitPeriodExport = async () => {
+    if (!periodUser || !periodRange[0] || !periodRange[1]) {
+      message.warning('请选择起始日期和结束日期')
+      return
+    }
+    if (!periodRange[1].isAfter(periodRange[0])) {
+      message.warning('结束日期必须晚于起始日期')
+      return
+    }
+    if (periodRange[1].diff(periodRange[0], 'day') > 365) {
+      message.warning('日期范围不能超过 365 天')
+      return
+    }
+    if (periodFormats.length === 0) {
+      message.warning('至少选择一个输出格式')
+      return
+    }
+    setPeriodSubmitting(true)
+    try {
+      await api.v2ExportPeriod(periodUser.user_id, {
+        start: periodRange[0].format('YYYY-MM-DD'),
+        end: periodRange[1].format('YYYY-MM-DD'),
+        formats: periodFormats.join(','),
+      })
+      message.success(`已创建 ${periodUser.username} 的指定日期账单`)
+      setPeriodOpen(false)
+      setTimeout(() => navigate('/billing/exports'), 500)
+    } catch (e: any) {
+      const msg = e?.response?.data?.error?.message || e?.message
+      message.error('创建失败: ' + msg)
+    } finally {
+      setPeriodSubmitting(false)
     }
   }
 
@@ -160,13 +208,18 @@ export default function BillingV2Customers() {
             ),
           },
           {
-            title: '操作', width: 160, fixed: 'right',
+            title: '操作', width: 250, fixed: 'right',
             render: (_, row) =>
               canExport ? (
                 <Space size={4}>
                   <Tooltip title="生成上个自然月账单 (默认 HTML + XLSX 打包 ZIP)">
                     <Button size="small" type="primary" onClick={() => onOpenGen(row)}>
                       生成上月账单
+                    </Button>
+                  </Tooltip>
+                  <Tooltip title="选择任意日期区间生成该客户账单">
+                    <Button size="small" onClick={() => onOpenPeriodExport(row)}>
+                      按日期导出
                     </Button>
                   </Tooltip>
                 </Space>
@@ -205,6 +258,58 @@ export default function BillingV2Customers() {
               限制: 每用户最多同时 2 个生成任务
             </div>
           </div>
+        )}
+      </Modal>
+
+      <Modal
+        title={periodUser ? `按日期导出 ${periodUser.username} 的账单` : '按日期导出客户账单'}
+        open={periodOpen}
+        onCancel={() => setPeriodOpen(false)}
+        onOk={onSubmitPeriodExport}
+        okText="创建导出任务"
+        cancelText="取消"
+        confirmLoading={periodSubmitting}
+        okButtonProps={{
+          disabled: !periodRange[0] || !periodRange[1] || periodFormats.length === 0,
+        }}
+      >
+        {periodUser && (
+          <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+            <div>
+              客户：<strong>{periodUser.username}</strong>（用户 ID：{periodUser.user_id}）
+            </div>
+            <Space wrap>
+              <DatePicker
+                value={periodRange[0]}
+                onChange={(d) => setPeriodRange([d, periodRange[1]])}
+                placeholder="起始日期（含）"
+                format="YYYY-MM-DD"
+                disabledDate={(d) => d && d > dayjs().endOf('day')}
+              />
+              <span>至</span>
+              <DatePicker
+                value={periodRange[1]}
+                onChange={(d) => setPeriodRange([periodRange[0], d])}
+                placeholder="结束日期（不含）"
+                format="YYYY-MM-DD"
+                disabledDate={(d) => d && d > dayjs().endOf('day')}
+              />
+            </Space>
+            <div style={{ color: '#999', fontSize: 12 }}>
+              结束日期不计入账单。例如 7 月 1 日至 7 月 16 日，导出的是 7 月 1 日到 7 月 15 日全天。
+            </div>
+            <div>
+              <div style={{ marginBottom: 8 }}>输出格式：</div>
+              <Checkbox.Group
+                value={periodFormats}
+                onChange={(v) => setPeriodFormats(v as string[])}
+                options={[
+                  { value: 'html', label: 'HTML（浏览器可读）' },
+                  { value: 'xlsx', label: 'Excel（财务处理）' },
+                ]}
+              />
+            </div>
+          </Space>
         )}
       </Modal>
     </div>

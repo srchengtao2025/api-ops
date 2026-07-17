@@ -89,7 +89,13 @@ func CleanupUserSem(userID int) {
 //  3. 入队 exportQueue
 //
 // 返回值: task_id, error
-func EnqueueExportTask(ctx context.Context, userID int, username, period, formats, kind, vendorCode, operator string) (string, error) {
+//
+// EnqueueExportTask 入队客户/上游对账导出任务
+//
+// periodStart / periodEnd (2026-07-15): 任意日期区间 [start, end) Unix 秒, 都=0 时走 period 月份对账
+//   - e.g. 月份对账: period="2026-06", periodStart=0, periodEnd=0
+//   - e.g. 任意区间: period="custom", periodStart=1748736000, periodEnd=1751328000
+func EnqueueExportTask(ctx context.Context, userID int, username, period, formats, kind, vendorCode, operator string, periodStart, periodEnd int64) (string, error) {
 	// 0) 兜底: kind 空时默认 customer (兼容老调用)
 	if kind == "" {
 		kind = "customer"
@@ -106,15 +112,17 @@ func EnqueueExportTask(ctx context.Context, userID int, username, period, format
 	// 2) 写 DB
 	taskID := newTaskID()
 	t := &dal.BillingExportTask{
-		TaskID:     taskID,
-		UserID:     userID,
-		Username:   username,
-		Period:     period,
-		Formats:    formats,
-		Kind:       kind,
-		VendorCode: vendorCode,
-		Status:     "pending",
-		Operator:   operator,
+		TaskID:      taskID,
+		UserID:      userID,
+		Username:    username,
+		Period:      period,
+		PeriodStart: periodStart,
+		PeriodEnd:   periodEnd,
+		Formats:     formats,
+		Kind:        kind,
+		VendorCode:  vendorCode,
+		Status:      "pending",
+		Operator:    operator,
 	}
 	if err := dal.CreateBillingExportTask(ctx, t); err != nil {
 		return "", err
@@ -220,11 +228,24 @@ func generateStatement(ctx context.Context, task *dal.BillingExportTask) (string
 }
 
 // generateCustomerStatement v2 客户对账单生成
+//
+// 2026-07-15: 区间优先级
+//  1. period_start/end 都不为 0 → 走 [start, end) 任意区间 (客户指定日期)
+//  2. period_start/end 都为 0   → 走 period (YYYY-MM 月份对账, 兼容老任务)
 func generateCustomerStatement(ctx context.Context, task *dal.BillingExportTask) (string, int64, error) {
-	// 1) 解析 period '2026-05' → [start, end)
-	startTS, endTS, err := PeriodBounds(task.Period)
-	if err != nil {
-		return "", 0, fmt.Errorf("invalid period: %w", err)
+	// 1) 解析 period / period_start+end → [start, end)
+	var startTS, endTS int64
+	if task.PeriodStart > 0 && task.PeriodEnd > 0 {
+		// 任意日期区间
+		startTS = task.PeriodStart
+		endTS = task.PeriodEnd
+	} else {
+		// 兼容: 月份对账 (period "2026-05" → [2026-05-01, 2026-06-01))
+		var err error
+		startTS, endTS, err = PeriodBounds(task.Period)
+		if err != nil {
+			return "", 0, fmt.Errorf("invalid period: %w", err)
+		}
 	}
 
 	// 2) 查 RoDB
@@ -235,6 +256,10 @@ func generateCustomerStatement(ctx context.Context, task *dal.BillingExportTask)
 	})
 	if err != nil {
 		return "", 0, fmt.Errorf("query statement: %w", err)
+	}
+	if stmt.Username == "" {
+		// 区间内没有日志时仍使用任务入队时记录的用户名，避免空标题/文件名。
+		stmt.Username = task.Username
 	}
 
 	// 3) 按 formats 渲染

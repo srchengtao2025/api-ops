@@ -128,6 +128,122 @@ LIMIT 1000`
 	})
 }
 
+// ===== 2. POST /api/billing/v2/customer/:uid/export-period =====
+//
+// 2026-07-15 新增: 按指定日期区间导出对账单 (不限月份)
+//
+// JSON body（推荐）或 query params（兼容脚本调用）:
+//   - start: YYYY-MM-DD (含, 必填, 北京时 00:00:00)
+//   - end:   YYYY-MM-DD (不含, 必填, e.g. 2026-07-01 表示 6/30 23:59:59 截止)
+//   - formats: html / xlsx / html,xlsx (可选, 默认 html,xlsx)
+//
+// 业务用例:
+//   - 客户要求"6/15~6/30 对账单" (半个月)
+//   - 客户要求"季度对账" (3 个月, 拆 3 个 task)
+//   - 跨年对账 (1 月 + 2 月连续)
+func (s *Server) billingV2ExportPeriod(c *gin.Context) {
+	uidStr := c.Param("uid")
+	uid, err := strconv.Atoi(uidStr)
+	if err != nil || uid <= 0 {
+		errResp(c, 400, "invalid uid", nil)
+		return
+	}
+	operator := getAuthUsername(c)
+	role := getAuthRole(c)
+	if role != "admin" && role != "finance" {
+		errResp(c, 403, "insufficient role (admin/finance required)", nil)
+		return
+	}
+	// 1) 解析 JSON body；同时保留 query 参数兼容命令行/旧调用方。
+	var body struct {
+		Start   string `json:"start"`
+		End     string `json:"end"`
+		Formats string `json:"formats"`
+	}
+	if c.Request.ContentLength != 0 {
+		if err := c.ShouldBindJSON(&body); err != nil {
+			errResp(c, 400, "invalid body: "+err.Error(), nil)
+			return
+		}
+	}
+	startStr := c.Query("start")
+	if startStr == "" {
+		startStr = body.Start
+	}
+	endStr := c.Query("end")
+	if endStr == "" {
+		endStr = body.End
+	}
+	if startStr == "" || endStr == "" {
+		errResp(c, 400, "start / end 必填 (YYYY-MM-DD, 北京时)", nil)
+		return
+	}
+	loc, _ := time.LoadLocation("Asia/Shanghai")
+	startDate, err := time.ParseInLocation("2006-01-02", startStr, loc)
+	if err != nil {
+		errResp(c, 400, "invalid start (want YYYY-MM-DD): "+err.Error(), nil)
+		return
+	}
+	endDate, err := time.ParseInLocation("2006-01-02", endStr, loc)
+	if err != nil {
+		errResp(c, 400, "invalid end (want YYYY-MM-DD): "+err.Error(), nil)
+		return
+	}
+	startTS := startDate.Unix()
+	endTS := endDate.Unix()
+	if endTS <= startTS {
+		errResp(c, 400, "end must be after start", nil)
+		return
+	}
+	// 1 年上限 (防爆内存 / 慢 SQL, 跟 v3 上游对账一致)
+	if endTS-startTS > 365*24*3600 {
+		errResp(c, 400, "date range too large (max 365 days)", nil)
+		return
+	}
+
+	// 2) formats (默认 html,xlsx)
+	formats := c.Query("formats")
+	if formats == "" {
+		formats = body.Formats
+	}
+	if formats == "" {
+		formats = "html,xlsx"
+	}
+	for _, f := range strings.Split(formats, ",") {
+		if f != "html" && f != "xlsx" {
+			errResp(c, 400, "invalid format: "+f+" (want html/xlsx/html,xlsx)", nil)
+			return
+		}
+	}
+
+	// 3) 入队 (内部限流: 每用户 ≤ 2 running)
+	u, err := dal.GetUser(c.Request.Context(), uid)
+	if err != nil || u == nil {
+		errResp(c, 404, "user not found", nil)
+		return
+	}
+	taskID, err := billing.EnqueueExportTask(c.Request.Context(), uid, u.Username, "custom", formats, "customer", "", operator, startTS, endTS)
+	if err != nil {
+		errResp(c, 429, err.Error(), nil)
+		return
+	}
+	_ = audit.NewLogger().Log(c, "billing.export.create", "billing_export_task", taskID,
+		"create custom-period export task", map[string]interface{}{
+			"user_id": uid, "period_start": startTS, "period_end": endTS,
+			"formats": formats, "operator": operator,
+		})
+	ok(c, gin.H{
+		"task_id":      taskID,
+		"status":       "pending",
+		"kind":         "customer",
+		"period":       "custom",
+		"period_start": startTS,
+		"period_end":   endTS,
+		"start_date":   startDate.Format("2006-01-02"),
+		"end_date":     endDate.Format("2006-01-02"),
+	})
+}
+
 // ===== 2. POST /api/billing/v2/customer/:uid/export-last-month =====
 func (s *Server) billingV2ExportLastMonth(c *gin.Context) {
 	uidStr := c.Param("uid")
@@ -178,7 +294,7 @@ func (s *Server) billingV2ExportLastMonth(c *gin.Context) {
 	period := lastMonth.Format("2006-01")
 
 	// 入队 (内部限流: 每用户 ≤ 2 running)
-	taskID, err := billing.EnqueueExportTask(c.Request.Context(), uid, u.Username, period, body.Formats, "customer", "", operator)
+	taskID, err := billing.EnqueueExportTask(c.Request.Context(), uid, u.Username, period, body.Formats, "customer", "", operator, 0, 0)
 	if err != nil {
 		// 限流报错
 		errResp(c, 429, err.Error(), nil)

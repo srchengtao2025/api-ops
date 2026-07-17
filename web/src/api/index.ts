@@ -263,6 +263,13 @@ export const api = {
       `/billing/v2/customer/${userId}/export-last-month`,
       req,
     ),
+  // 2026-07-15: 按指定日期区间导出 (任意 [start, end) 区间, 不限月份)
+  v2ExportPeriod: (userId: number, req: { start: string; end: string; formats?: string }) =>
+    http.post<{
+      task_id: string; status: string; kind: string;
+      period: string; period_start: number; period_end: number;
+      start_date: string; end_date: string;
+    }>(`/billing/v2/customer/${userId}/export-period`, req),
   v2CustomerTasks: (userId: number, params: { status?: string; limit?: number } = {}) =>
     http.get<ListResp<V2ExportTask>>(`/billing/v2/customer/${userId}/tasks`, { params }),
   v2ExportTasks: (params: { status?: string; limit?: number } = {}) =>

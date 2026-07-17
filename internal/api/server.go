@@ -148,6 +148,10 @@ func (s *Server) registerRoutes() {
 		api.POST("/billing/v2/customer/:uid/export-last-month",
 			requireRole(string(dal.OpsUserRoleAdmin), string(dal.OpsUserRoleFinance)),
 			s.billingV2ExportLastMonth)
+		// 2026-07-15: 按指定日期区间导出对账单 (任意 [start, end) 区间, 不限月份)
+		api.POST("/billing/v2/customer/:uid/export-period",
+			requireRole(string(dal.OpsUserRoleAdmin), string(dal.OpsUserRoleFinance)),
+			s.billingV2ExportPeriod)
 		api.GET("/billing/v2/customer/:uid/tasks", s.billingV2CustomerTasks)
 		api.GET("/billing/v2/export-tasks", s.billingV2ExportTasks)
 		api.GET("/billing/v2/export-tasks/:task_id/download", s.billingV2Download)
