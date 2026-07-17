@@ -11,7 +11,7 @@
 ## 1. 编译验证
 
 ```bash
-$ cd /Users/abnercheng/Documents/api-ops/api-ops
+$ cd /Users/<USER>/Documents/api-ops/api-ops
 $ CGO_ENABLED=0 go build ./...
 # (no output, OK)
 ```

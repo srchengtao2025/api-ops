@@ -9,7 +9,7 @@
 //
 // 例: user_alpha (uid=47) 5 月
 //
-//	revenue = 1,002,849 calls × quota / 500000 = ~$70,226.82
+//	revenue = <NUM_CALLS> calls × quota / 500000 = ~<USD_AMOUNT>
 //	cost = (revenue / 0.64) × 0.24 = ~$26,335
 //	profit = ~$43,891
 //	margin = 1.667 (166.7%)

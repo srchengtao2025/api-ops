@@ -104,25 +104,25 @@ api-ops 严格只能有 **3 个数据源**，任何"第 4 源"必须砍掉或归
 
 ## 仓库双轨铁律 (2026-06-15 23:00 决策, 用户拍板)
 
-> api-ops 有 **2 套仓库**, **生产领先**模式: 内部仓库 `rezeai-ops` 是真源, 开源仓库 `api-ops` 是脱敏镜像.
+> api-ops 有 **2 套仓库**, **生产领先**模式: 内部仓库 `<PROD_REPO>` 是真源, 开源仓库 `api-ops` 是脱敏镜像.
 
 | 仓库 | 类型 | 平台 | 角色 | 谁能改 |
 |---|---|---|---|---|
-| `rezeai-ops` (生产) | private | 内网 GitLab | 真源, 跑在 47.251.85.62 | 内部团队 |
+| `<PROD_REPO>` (生产) | private | 内网 GitLab | 真源, 跑在 <ECS_PUBLIC_IP> | 内部团队 |
 | `api-ops` (开源) | public | **GitHub 公开** | 脱敏镜像, 给社区读 + 提 PR | 社区, 但 PR 必走 RFC |
 
 **铁律**:
 
-1. **生产领先** — 99% 的代码改动在 `rezeai-ops` 完成, 部署验证, **手动挑非敏感 commit** cherry-pick / cherry-export 到 `api-ops`. 反向 (开源先行) 不允许, 避免公开仓库的变更倒灌回生产.
+1. **生产领先** — 99% 的代码改动在 `<PROD_REPO>` 完成, 部署验证, **手动挑非敏感 commit** cherry-pick / cherry-export 到 `api-ops`. 反向 (开源先行) 不允许, 避免公开仓库的变更倒灌回生产.
 2. **每周一次 sync** — 周末 (建议周六上午) 把生产过去 7 天的非敏感 commit 推送到开源仓库. 详见 [docs/SYNC-PROD-TO-OPEN.md](./docs/SYNC-PROD-TO-OPEN.md) SOP.
 3. **敏感判定清单** (推送前必过) — commit message 或 diff 命中以下任一, **必 skip**:
-   - 含真 IP / 真 RDS host / 真 ECS 公网 IP / 真域名 (47.251.85.62 / upstream-pg.example.com 之外的真实地址)
+   - 含真 IP / 真 RDS host / 真 ECS 公网 IP / 真域名 (<ECS_PUBLIC_IP> / upstream-pg.example.com 之外的真实地址)
    - 含真 token / 真密码 / 真 SSH 凭据 / 真 API key
    - 含真客户名 / 真业务数字 / 真 vendor / 真模型名 (跟 5 个假名 provider_alpha/beta/gamma/delta/epsilon / 6 个假名 llm-model-a/b/c 不一致的)
-   - 含真部署路径 (`/opt/rezeai-ops` / `/data/billing-exports` 等内部路径)
+   - 含真部署路径 (`/opt/<PROD_REPO>` / `/data/billing-exports` 等内部路径)
    - 含真域名 (`upstream.com` 之外的客户内部域名, 即使是 internal DNS)
    - commit message 提到具体客户 / 团队成员名字
-4. **推送脚本化** — `scripts/sync-prod-to-open.sh` (待写) 自动: 读 rezeai-ops 过去 7 天 commit → 跑敏感判定 → 输出"可推送 N 个 / 跳过 M 个"清单 → 确认后 git format-patch + apply 到 api-ops. **不要手工复制代码**.
+4. **推送脚本化** — `scripts/sync-prod-to-open.sh` (待写) 自动: 读 <PROD_REPO> 过去 7 天 commit → 跑敏感判定 → 输出"可推送 N 个 / 跳过 M 个"清单 → 确认后 git format-patch + apply 到 api-ops. **不要手工复制代码**.
 5. **公开仓库 PR 必走 RFC** — 社区 PR 进来, 必:
    - 先开 issue 讨论, maintainer approve
    - 必含 RFC 引用 (docs/BILLING-v5-RFC.md 等)
@@ -130,11 +130,11 @@ api-ops 严格只能有 **3 个数据源**，任何"第 4 源"必须砍掉或归
    - 必含 隐私铁律 checkbox (没真 token / 没真业务数据)
    - 不符合任一 = close + 标 `stale`
 6. **不互推 secret** — 公开仓库的 `.env` 永远是 `.env.example` 模板. 即使是 staging token, 也不进 git. CI 用 GitHub Secrets 注入.
-7. **两套 commit author 不混** — 推到开源仓库时, 用 bot account `api-ops-bot <noreply@api-ops.dev>`, 跟 rezeai-ops 的真实开发邮箱脱钩. git config `--local` 临时设.
-8. **v1.0 标签前不互推** — 首次脱敏版本 (commit `c921113`) 是 snapshot 状态, **不是** "v1.0". 真正 v1.0 等 rezeai-ops 上线 v4 利润分析稳定 1 个月后, 再打 tag.
-9. **反向 cherry-pick 走 8 步 SOP** — 社区 PR 想 cherry-pick 回 rezeai-ops, 必先开 issue → 5 项真源等价性验证 → staging 部署 → playwright 截图 → 公网部署 → 24h 监控 → 30 天观察 → 永久接受 comment. 完整流程在 [docs/SYNC-PROD-TO-OPEN.md §反向: GitHub PR → rezeai-ops (8 步)](./docs/SYNC-PROD-TO-OPEN.md#反向-github-pr--rezeai-ops-8-步). **频率期望 ≤ 1 次/季度**, 99% 反向是生产→开源. 5 条反模式禁止 (见 SOP 末): ❌ 直接 `git pull api-open main` / ❌ 留 `api-open` remote 不删 / ❌ cherry-pick `seed_admin.go` 改 / ❌ 不更新 CHANGELOG / ❌ 不加 "cherry-pick" 飞书告警标签.
+7. **两套 commit author 不混** — 推到开源仓库时, 用 bot account `api-ops-bot <noreply@api-ops.dev>`, 跟 <PROD_REPO> 的真实开发邮箱脱钩. git config `--local` 临时设.
+8. **v1.0 标签前不互推** — 首次脱敏版本 (commit `c921113`) 是 snapshot 状态, **不是** "v1.0". 真正 v1.0 等 <PROD_REPO> 上线 v4 利润分析稳定 1 个月后, 再打 tag.
+9. **反向 cherry-pick 走 8 步 SOP** — 社区 PR 想 cherry-pick 回 <PROD_REPO>, 必先开 issue → 5 项真源等价性验证 → staging 部署 → playwright 截图 → 公网部署 → 24h 监控 → 30 天观察 → 永久接受 comment. 完整流程在 [docs/SYNC-PROD-TO-OPEN.md §反向: GitHub PR → <PROD_REPO> (8 步)](./docs/SYNC-PROD-TO-OPEN.md#反向-github-pr--<PROD_REPO>-8-步). **频率期望 ≤ 1 次/季度**, 99% 反向是生产→开源. 5 条反模式禁止 (见 SOP 末): ❌ 直接 `git pull api-open main` / ❌ 留 `api-open` remote 不删 / ❌ cherry-pick `seed_admin.go` 改 / ❌ 不更新 CHANGELOG / ❌ 不加 "cherry-pick" 飞书告警标签.
 
-**与生产 rezeai-ops 关系**: api-ops 跟 rezeai-ops 是 `codebase` 血缘, 不是 git 血缘. 没有 git remote, 没有 fork. 同步走 `git format-patch + git am` 或 rsync + sed 后 diff.
+**与生产 <PROD_REPO> 关系**: api-ops 跟 <PROD_REPO> 是 `codebase` 血缘, 不是 git 血缘. 没有 git remote, 没有 fork. 同步走 `git format-patch + git am` 或 rsync + sed 后 diff.
 
 ## newapi 字段陷阱 (2026-06-14 PR #8 发现)
 

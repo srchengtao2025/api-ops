@@ -4,16 +4,35 @@
 
 ---
 
+## [Sync 2026-07-17] from <PROD_REPO>
+
+本次只同步可公开、可在单站点版本独立运行的客户账单能力：
+
+- `4820e31` — 支持按指定日期区间创建客户账单导出任务。
+- `69828e0` — 完善任意区间的账期标签。
+- `40034ae` — 修复日期区间请求、上海时区边界、统计字段映射和用户名兜底。
+- `71c8d7e` — 在客户账单列表增加“按日期导出”入口。
+
+公开版适配：保留单站点数据访问方式，不包含生产多站点路由、内部客户健康模块或环境连接逻辑。
+
+跳过（敏感或与公开版无关）：
+
+- 生产环境连接与基础设施修复。
+- 含真实运营数据的线上截图。
+- 生产部署说明及内部路径。
+
+---
+
 ## 2026-06-16 (今天) — 反向 cherry-pick SOP 落地
 
 ### 新增流程
-- **反向: GitHub PR → rezeai-ops (8 步)** — 社区 PR 想 cherry-pick 回生产, 走 issue → 5 项真源等价性验证 → staging → playwright → 公网 → 24h 监控 → 30 天观察 → 永久接受
-- 完整流程在 [docs/SYNC-PROD-TO-OPEN.md §反向: GitHub PR → rezeai-ops (8 步)](./SYNC-PROD-TO-OPEN.md#反向-github-pr--rezeai-ops-8-步)
+- **反向: GitHub PR → <PROD_REPO> (8 步)** — 社区 PR 想 cherry-pick 回生产, 走 issue → 5 项真源等价性验证 → staging → playwright → 公网 → 24h 监控 → 30 天观察 → 永久接受
+- 完整流程在 [docs/SYNC-PROD-TO-OPEN.md §反向: GitHub PR → <PROD_REPO> (8 步)](./SYNC-PROD-TO-OPEN.md#反向-github-pr--<PROD_REPO>-8-步)
 - 频率期望 ≤ 1 次/季度, 99% 反向是生产→开源
 - 5 条反模式禁止 (见 SOP 末)
 
 ### AGENTS.md 铁律 #9
-- 两套仓库 (api-ops + rezeai-ops) AGENTS.md §仓库双轨铁律 同步加 #9
+- 两套仓库 (api-ops + <PROD_REPO>) AGENTS.md §仓库双轨铁律 同步加 #9
 - 5 条反模式写入 SOP 跟 AGENTS.md
 
 ---
@@ -21,7 +40,7 @@
 ## 2026-06-15 (今天) — 仓库双轨策略确立 + 首次脱敏发布
 
 ### 决策主线
-- **仓库双轨策略** (2026-06-15 23:00 决策, 用户拍板): rezeai-ops (生产内网) 跟 api-ops (GitHub 公开) 分两套仓库走, **生产领先** 模式
+- **仓库双轨策略** (2026-06-15 23:00 决策, 用户拍板): <PROD_REPO> (生产内网) 跟 api-ops (GitHub 公开) 分两套仓库走, **生产领先** 模式
 - 详见 [AGENTS.md §仓库双轨铁律](../AGENTS.md#仓库双轨铁律-2026-06-15-2300-决策-用户拍板) + [SYNC-PROD-TO-OPEN.md](./SYNC-PROD-TO-OPEN.md) SOP
 
 ### 首次脱敏发布 (snapshot)
@@ -225,7 +244,7 @@ f6dceb0 PR #8 远端部署 + cache_tokens 字段修正 + Dockerfile 模板挂载
 
 **HTML 合计行**:
 ```
-1,002,849 调用 / 10,170,088,714 输入 / 12,615,368,816 输出 / 1,249,816,309 cache / $70,226.82 USD
+<NUM_CALLS> 调用 / 10,170,088,714 输入 / 12,615,368,816 输出 / 1,249,816,309 cache / <USD_AMOUNT> USD
 ```
 
 ### 关键经验 (后续部署参考)

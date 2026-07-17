@@ -11,7 +11,8 @@
 //   - 失败显示 error_msg 红色
 //   - 30 天后自动清理 (后端 PR #7 调度器)
 import { useEffect, useState, useRef } from 'react'
-import { Button, Card, Select, Space, Table, Tag, Tooltip, Progress, message, Modal } from 'antd'
+import { Button, Card, Select, Space, Table, Tag, Tooltip, Progress, message, Modal, DatePicker, Form, InputNumber } from 'antd'
+import dayjs, { Dayjs } from 'dayjs'
 import { ReloadOutlined, DownloadOutlined, ClockCircleOutlined, CheckCircleOutlined, CloseCircleOutlined, LoadingOutlined, StopOutlined } from '@ant-design/icons'
 import { api, V2ExportTask } from '../api'
 import { getUser } from '../api'
@@ -45,6 +46,10 @@ export default function BillingV2Exports() {
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(false)
   const [statusFilter, setStatusFilter] = useState<string | undefined>(undefined)
+  // 2026-07-15: 按指定日期区间导出 UI state
+  const [periodExportUid, setPeriodExportUid] = useState<number | undefined>(undefined)
+  const [periodExportRange, setPeriodExportRange] = useState<[Dayjs | null, Dayjs | null]>([null, null])
+  const [periodExporting, setPeriodExporting] = useState(false)
   const me = getUser()
   const canCancel = me?.role === 'admin' || me?.role === 'finance'
   const timerRef = useRef<number | null>(null)
@@ -97,6 +102,40 @@ export default function BillingV2Exports() {
     document.body.removeChild(a)
   }
 
+  // 2026-07-15: 按指定日期区间导出对账单
+  const onExportPeriod = async () => {
+    if (!periodExportUid || !periodExportRange[0] || !periodExportRange[1]) {
+      message.warning('请填写用户 ID 和日期区间')
+      return
+    }
+    const start = periodExportRange[0]
+    const end = periodExportRange[1]
+    if (!end.isAfter(start)) {
+      message.warning('结束日期必须晚于起始日期')
+      return
+    }
+    if (end.diff(start, 'day') > 365) {
+      message.warning('日期范围不能超过 365 天')
+      return
+    }
+    setPeriodExporting(true)
+    try {
+      const res: any = await api.v2ExportPeriod(periodExportUid, {
+        start: start.format('YYYY-MM-DD'),
+        end: end.format('YYYY-MM-DD'),
+        formats: 'html,xlsx',
+      })
+      message.success(`已入队: ${res.task_id} (${res.start_date} ~ ${res.end_date})`)
+      // 5s 后刷新列表
+      setTimeout(() => fetch(true), 5000)
+    } catch (e: any) {
+      const msg = e?.response?.data?.error?.message || e?.message
+      message.error('提交失败: ' + msg)
+    } finally {
+      setPeriodExporting(false)
+    }
+  }
+
   const onCancel = (task: V2ExportTask) => {
     Modal.confirm({
       title: `取消任务?`,
@@ -139,6 +178,47 @@ export default function BillingV2Exports() {
         异步账单导出任务, 默认 5s 轮询. 完成后状态变为"完成"可下载 ZIP (含 HTML + XLSX).
         30 天后自动清理.
       </p>
+
+      {/* 2026-07-15: 按指定日期区间导出 (任意 [start, end) 区间, 不限月份) */}
+      <Card size="small" style={{ marginBottom: 16, background: '#fafafa' }}>
+        <Space wrap size="middle" align="end">
+          <Form.Item label="用户 ID" style={{ marginBottom: 0 }}>
+            <InputNumber
+              placeholder="uid"
+              min={1}
+              value={periodExportUid}
+              onChange={(v) => setPeriodExportUid(v ?? undefined)}
+              style={{ width: 120 }}
+            />
+          </Form.Item>
+          <Form.Item label="起始日期 (含)" style={{ marginBottom: 0 }}>
+            <DatePicker
+              value={periodExportRange[0]}
+              onChange={(d) => setPeriodExportRange([d, periodExportRange[1]])}
+              placeholder="开始日期"
+              format="YYYY-MM-DD"
+              disabledDate={(d) => d && d > dayjs().endOf('day')}
+            />
+          </Form.Item>
+          <Form.Item label="结束日期 (不含)" style={{ marginBottom: 0 }}>
+            <DatePicker
+              value={periodExportRange[1]}
+              onChange={(d) => setPeriodExportRange([periodExportRange[0], d])}
+              placeholder="结束日期 (不含)"
+              format="YYYY-MM-DD"
+              disabledDate={(d) => d && d > dayjs().endOf('day')}
+            />
+          </Form.Item>
+          <Button
+            type="primary"
+            loading={periodExporting}
+            onClick={onExportPeriod}
+            disabled={!periodExportUid || !periodExportRange[0] || !periodExportRange[1]}
+          >
+            按日期导出对账单
+          </Button>
+        </Space>
+      </Card>
 
       <Space size="large" style={{ marginBottom: 16 }}>
         <Card size="small" style={{ minWidth: 140 }}>

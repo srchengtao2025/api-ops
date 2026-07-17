@@ -40,7 +40,7 @@ export default function ChangePasswordModal({ open, onClose }: Props) {
       confirmLoading={loading}
       okText="确认修改"
       cancelText="取消"
-      destroyOnClose
+      destroyOnHidden
     >
       <Form form={form} layout="vertical" preserve={false}>
         <Form.Item

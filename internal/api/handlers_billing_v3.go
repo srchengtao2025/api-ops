@@ -154,7 +154,7 @@ func (s *Server) billingV3UpstreamExportLastMonth(c *gin.Context) {
 	// 给每个 vendor 创建一个任务
 	created := []gin.H{}
 	for _, vc := range vendorCodes {
-		taskID, err := billing.EnqueueExportTask(c.Request.Context(), int(uid), operator, period, body.Formats, "upstream", vc, operator)
+		taskID, err := billing.EnqueueExportTask(c.Request.Context(), int(uid), operator, period, body.Formats, "upstream", vc, operator, 0, 0)
 		if err != nil {
 			errResp(c, 500, fmt.Sprintf("enqueue %s: %v", vc, err), nil)
 			return

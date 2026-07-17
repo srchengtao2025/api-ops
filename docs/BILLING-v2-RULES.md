@@ -255,7 +255,7 @@ pending ──> running ──> success
 ### 8.3 公网端到端 (PR #8 完成, 2026-06-14)
 
 - **真实 RoDB 端到端**: user_alpha (uid=47) 2026-05 → 任务成功 → 下载 zip → 解压校验 ✅
-  - HTML 合计行: 1,002,849 调用 / 101.7亿输入 / 126.2亿输出 / 12.5亿 cache / **$70,226.82 USD**
+  - HTML 合计行: <NUM_CALLS> 调用 / <NUM_INPUT_TOKENS>输入 / <NUM_OUTPUT_TOKENS>输出 / <NUM_CACHE_TOKENS> cache / **<USD_AMOUNT> USD**
   - XLSX sharedStrings: 汇总表头 7 列单字段 `缓存 tokens` ✅
   - 任务 6 秒内 success, progress 100, file_size 11.6KB
 - 5s 轮询压测: 略 (后续)

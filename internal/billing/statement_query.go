@@ -77,10 +77,14 @@ type StatementQueryParams struct {
 
 // PeriodBounds 把 'YYYY-MM' 转 unix 秒 [start, end)
 //
-// 例子: "2026-05" → 2026-05-01 00:00:00 UTC ~ 2026-06-01 00:00:00 UTC
+// 例子: "2026-05" → 2026-05-01 00:00:00 Asia/Shanghai ~ 2026-06-01 00:00:00 Asia/Shanghai
 // 注意: 跟用户业务习惯对齐, 上月 = 上个自然月 (不是 30 天滚动)
 func PeriodBounds(period string) (int64, int64, error) {
-	t, err := time.Parse("2006-01", period)
+	loc, err := time.LoadLocation("Asia/Shanghai")
+	if err != nil {
+		return 0, 0, fmt.Errorf("load Asia/Shanghai: %w", err)
+	}
+	t, err := time.ParseInLocation("2006-01", period, loc)
 	if err != nil {
 		return 0, 0, fmt.Errorf("invalid period (want YYYY-MM): %w", err)
 	}
@@ -126,8 +130,8 @@ LIMIT 100000`
 	if err := row.Scan(
 		&sum.RequestCount,
 		&sum.PromptTokens,
-		&sum.CompletionTokens,
 		&sum.CacheTokens,
+		&sum.CompletionTokens,
 
 		&sum.RevenueUSD,
 	); err != nil {
@@ -137,7 +141,7 @@ LIMIT 100000`
 	// 2) 按天
 	byDaySQL := `
 SELECT
-  TO_CHAR(TO_TIMESTAMP(created_at), 'YYYY-MM-DD') AS day,
+  TO_CHAR(TO_TIMESTAMP(created_at) AT TIME ZONE 'Asia/Shanghai', 'YYYY-MM-DD') AS day,
   COUNT(*) AS request_count,
   COALESCE(SUM(prompt_tokens), 0) AS prompt_tokens,
   COALESCE(SUM((other::jsonb->>'cache_tokens')::bigint), 0) AS cache_tokens,
@@ -161,8 +165,8 @@ LIMIT 100000`
 		var r StatementByDay
 		if err := byDayRows.Scan(
 			&r.Date, &r.RequestCount,
-			&r.PromptTokens, &r.CompletionTokens,
-			&r.CacheTokens,
+			&r.PromptTokens, &r.CacheTokens,
+			&r.CompletionTokens,
 			&r.RevenueUSD,
 		); err != nil {
 			return nil, fmt.Errorf("by_day scan failed: %w", err)
@@ -197,8 +201,8 @@ LIMIT 100000`
 		var r StatementByModel
 		if err := byModelRows.Scan(
 			&r.ModelName, &r.RequestCount,
-			&r.PromptTokens, &r.CompletionTokens,
-			&r.CacheTokens,
+			&r.PromptTokens, &r.CacheTokens,
+			&r.CompletionTokens,
 			&r.RevenueUSD,
 		); err != nil {
 			return nil, fmt.Errorf("by_model scan failed: %w", err)
@@ -206,17 +210,42 @@ LIMIT 100000`
 		byModel = append(byModel, r)
 	}
 
+	// username 直接来自目标区间的 logs；若区间无日志，worker 会使用任务中的用户名兜底。
 	username := ""
-	if u, _ := dal.GetUser(ctx, params.UserID); u != nil {
-		username = u.Username
-	}
+	_ = dal.RoDB().WithContext(ctx).Table("logs").
+		Select("username").
+		Where("user_id = ? AND created_at >= ? AND created_at < ?", params.UserID, params.StartTS, params.EndTS).
+		Order("created_at DESC").Limit(1).Scan(&username).Error
+	// Period label (2026-07-15): 跟历史兼容 + 任意区间可读
+	//   同一自然月 (start/end 同月) → "YYYY-MM" (跟老格式一致)
+	//   跨月或非完整月 (任意区间) → "YYYY-MM-DD~YYYY-MM-DD" (明示日期范围)
+	periodLabel := buildPeriodLabel(params.StartTS, params.EndTS)
 	return &FullStatement{
 		UserID:      params.UserID,
 		Username:    username,
-		Period:      time.Unix(params.StartTS, 0).UTC().Format("2006-01"),
+		Period:      periodLabel,
 		Summary:     sum,
 		ByDay:       byDay,
 		ByModel:     byModel,
 		GeneratedAt: time.Now().Unix(),
 	}, nil
+}
+
+// buildPeriodLabel 2026-07-15: Period 字段从 "YYYY-MM" 扩到支持任意区间
+//   - 同一月完整月 (e.g. 2026-06-01 ~ 2026-07-01) → "2026-06" (兼容老格式)
+//   - 跨月或非完整月 (e.g. 2026-06-15 ~ 2026-07-01) → "2026-06-15~2026-07-01"
+func buildPeriodLabel(startTS, endTS int64) string {
+	loc, err := time.LoadLocation("Asia/Shanghai")
+	if err != nil {
+		loc = time.UTC
+	}
+	start := time.Unix(startTS, 0).In(loc)
+	end := time.Unix(endTS, 0).In(loc)
+	monthStart := time.Date(start.Year(), start.Month(), 1, 0, 0, 0, 0, loc)
+	nextMonthStart := monthStart.AddDate(0, 1, 0)
+	if start.Equal(monthStart) && end.Equal(nextMonthStart) {
+		return start.Format("2006-01")
+	}
+	// 任意区间: 显示完整日期范围
+	return start.Format("2006-01-02") + "~" + end.Format("2006-01-02")
 }

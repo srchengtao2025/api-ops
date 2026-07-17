@@ -496,23 +496,29 @@ func AllSeedTables() []interface{} {
 //   - Kind: 'customer' (v2) / 'upstream' (v3)
 //   - VendorCode: v3 上游对账任务用, 客户对账任务为空
 type BillingExportTask struct {
-	ID         uint64     `gorm:"primaryKey;autoIncrement" json:"id"`
-	TaskID     string     `gorm:"size:64;uniqueIndex;not null" json:"task_id"` // uuid, 暴露给前端
-	UserID     int        `gorm:"not null" json:"user_id"`
-	Username   string     `gorm:"size:64;not null" json:"username"` // 冗余, 列表展示
-	Period     string     `gorm:"size:7;not null" json:"period"`    // '2026-05'
-	Formats    string     `gorm:"size:32;not null" json:"formats"`  // 'html' / 'xlsx' / 'html,xlsx'
-	Kind       string     `gorm:"size:16;not null;default:'customer';check:kind IN ('customer','upstream')" json:"kind"`
-	VendorCode string     `gorm:"size:64" json:"vendor_code"`
-	Status     string     `gorm:"size:16;not null;default:pending" json:"status"`
-	Progress   int        `gorm:"default:0" json:"progress"`  // 0-100
-	FilePath   string     `gorm:"type:text" json:"file_path"` // /data/billing-exports/{task_id}.zip
-	FileSize   int64      `json:"file_size"`
-	ErrorMsg   string     `gorm:"type:text" json:"error_msg"`
-	StartedAt  *time.Time `json:"started_at"`
-	FinishedAt *time.Time `json:"finished_at"`
-	CreatedAt  time.Time  `gorm:"not null;default:now()" json:"created_at"`
-	Operator   string     `gorm:"size:64;not null" json:"operator"`
+	ID         uint64 `gorm:"primaryKey;autoIncrement" json:"id"`
+	TaskID     string `gorm:"size:64;uniqueIndex;not null" json:"task_id"` // uuid, 暴露给前端
+	UserID     int    `gorm:"not null" json:"user_id"`
+	Username   string `gorm:"size:64;not null" json:"username"` // 冗余, 列表展示
+	Period     string `gorm:"size:7;not null" json:"period"`    // '2026-05' 月份对账, 或 'custom' 任意区间
+	Formats    string `gorm:"size:32;not null" json:"formats"`  // 'html' / 'xlsx' / 'html,xlsx'
+	Kind       string `gorm:"size:16;not null;default:'customer';check:kind IN ('customer','upstream')" json:"kind"`
+	VendorCode string `gorm:"size:64" json:"vendor_code"`
+	// 任意日期区间 (2026-07-15): period_start/end 都是 0 时走 Period (YYYY-MM 月份对账)
+	// period_start = 任意区间 [start, end) 起点 (含), Unix 秒
+	// period_end   = 任意区间 [start, end) 终点 (不含), Unix 秒
+	// 业务用法: 客户要求按指定日期导出对账单 (e.g. 6/15 ~ 6/30)
+	PeriodStart int64      `gorm:"default:0" json:"period_start"`
+	PeriodEnd   int64      `gorm:"default:0" json:"period_end"`
+	Status      string     `gorm:"size:16;not null;default:pending" json:"status"`
+	Progress    int        `gorm:"default:0" json:"progress"`  // 0-100
+	FilePath    string     `gorm:"type:text" json:"file_path"` // /data/billing-exports/{task_id}.zip
+	FileSize    int64      `json:"file_size"`
+	ErrorMsg    string     `gorm:"type:text" json:"error_msg"`
+	StartedAt   *time.Time `json:"started_at"`
+	FinishedAt  *time.Time `json:"finished_at"`
+	CreatedAt   time.Time  `gorm:"not null;default:now()" json:"created_at"`
+	Operator    string     `gorm:"size:64;not null" json:"operator"`
 }
 
 func (BillingExportTask) TableName() string { return "billing_export_tasks" }

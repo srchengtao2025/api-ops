@@ -5,6 +5,7 @@ package api
 import (
 	"crypto/subtle"
 	"errors"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -147,6 +148,10 @@ func (s *Server) registerRoutes() {
 		api.POST("/billing/v2/customer/:uid/export-last-month",
 			requireRole(string(dal.OpsUserRoleAdmin), string(dal.OpsUserRoleFinance)),
 			s.billingV2ExportLastMonth)
+		// 2026-07-15: 按指定日期区间导出对账单 (任意 [start, end) 区间, 不限月份)
+		api.POST("/billing/v2/customer/:uid/export-period",
+			requireRole(string(dal.OpsUserRoleAdmin), string(dal.OpsUserRoleFinance)),
+			s.billingV2ExportPeriod)
 		api.GET("/billing/v2/customer/:uid/tasks", s.billingV2CustomerTasks)
 		api.GET("/billing/v2/export-tasks", s.billingV2ExportTasks)
 		api.GET("/billing/v2/export-tasks/:task_id/download", s.billingV2Download)
@@ -458,7 +463,11 @@ func parseUint(s string) uint64 {
 	if s == "" {
 		return 0
 	}
-	v, _ := strconv.ParseUint(s, 10, 64)
+	v, err := strconv.ParseUint(s, 10, 64)
+	if err != nil {
+		log.Printf("[api] parseUint(%q) failed: %v", s, err)
+		return 0
+	}
 	return v
 }
 
@@ -466,7 +475,11 @@ func parseInt(s string) int {
 	if s == "" {
 		return 0
 	}
-	v, _ := strconv.Atoi(s)
+	v, err := strconv.Atoi(s)
+	if err != nil {
+		log.Printf("[api] parseInt(%q) failed: %v", s, err)
+		return 0
+	}
 	return v
 }
 
@@ -474,7 +487,11 @@ func parseInt64(s string) int64 {
 	if s == "" {
 		return 0
 	}
-	v, _ := strconv.ParseInt(s, 10, 64)
+	v, err := strconv.ParseInt(s, 10, 64)
+	if err != nil {
+		log.Printf("[api] parseInt64(%q) failed: %v", s, err)
+		return 0
+	}
 	return v
 }
 

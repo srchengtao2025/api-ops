@@ -6,6 +6,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/joho/godotenv"
 )
@@ -69,8 +70,9 @@ type Config struct {
 	CORSAllowedOrigins string // 逗号分隔的 CORS 白名单
 }
 
-// C 全局配置实例
+// C 全局配置实例（只允许 Load() 设置一次，后续并发安全读）
 var C *Config
+var configOnce sync.Once
 
 // Load 从 .env (可选) + 环境变量加载配置
 func Load() (*Config, error) {
@@ -86,17 +88,17 @@ func Load() (*Config, error) {
 		RedisPassword:         os.Getenv("REDIS_PASSWORD"),
 		RedisDB:               getEnvInt("REDIS_DB", 0),
 		UpstreamRoDSN:         os.Getenv("API_OPS_RO_DSN"),
-		UpstreamAdminBaseURL:  os.Getenv("upstream_ADMIN_BASE_URL"),
+		UpstreamAdminBaseURL:  getEnvAlias("API_OPS_ADMIN_BASE_URL", "upstream_ADMIN_BASE_URL", ""),
 		UpstreamAdminToken:    os.Getenv("API_OPS_ADMIN_TOKEN"),
-		UpstreamAdminUserID:   getEnv("upstream_ADMIN_USER_ID", "1"),
+		UpstreamAdminUserID:   getEnvAlias("API_OPS_ADMIN_USER_ID", "upstream_ADMIN_USER_ID", "1"),
 		QuotaPerUnit:          getEnvFloat("QUOTA_PER_UNIT", 500000),
 		USDCNYRate:            getEnvFloat("USD_CNY_RATE", 7.20),
 		DisplayCurrency:       strings.ToUpper(getEnv("DISPLAY_CURRENCY", "CNY")),
 		UpstreamImportMaxRows: getEnvInt("UPSTREAM_IMPORT_MAX_ROWS", 50000),
 		DailyStmtCron:         getEnv("DAILY_STMT_CRON", "0 2 * * *"),
-		UpstreamLLMBaseURL:    os.Getenv("upstream_LLM_BASE_URL"),
+		UpstreamLLMBaseURL:    getEnvAlias("API_OPS_LLM_BASE_URL", "upstream_LLM_BASE_URL", ""),
 		UpstreamLLMAPIKey:     os.Getenv("API_OPS_LLM_API_KEY"),
-		UpstreamLLMModel:      getEnv("upstream_LLM_MODEL", "claude-sonnet-4-5"),
+		UpstreamLLMModel:      getEnvAlias("API_OPS_LLM_MODEL", "upstream_LLM_MODEL", "claude-sonnet-4-5"),
 		DingtalkWebhook:       os.Getenv("DINGTALK_WEBHOOK"),
 		FeishuWebhook:         os.Getenv("FEISHU_WEBHOOK"),
 		WecomWebhook:          os.Getenv("WECOM_WEBHOOK"),
@@ -118,7 +120,8 @@ func Load() (*Config, error) {
 	if err := cfg.Validate(); err != nil {
 		return nil, err
 	}
-	C = cfg
+	// (2026-07-03 FIX: 使用 sync.Once 防止并行测试或多 goroutine 覆盖)
+	configOnce.Do(func() { C = cfg })
 	return cfg, nil
 }
 
@@ -168,6 +171,18 @@ func getEnvFloat(key string, def float64) float64 {
 		if f, err := strconv.ParseFloat(v, 64); err == nil {
 			return f
 		}
+	}
+	return def
+}
+
+// getEnvAlias 兼容性辅助：优先读主 key，空则 fallback 到旧名 alias
+// (2026-07-03: 统一 env var 命名，同时向后兼容旧名)
+func getEnvAlias(key, alias, def string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	if v := os.Getenv(alias); v != "" {
+		return v
 	}
 	return def
 }

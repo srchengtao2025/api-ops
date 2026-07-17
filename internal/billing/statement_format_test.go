@@ -184,17 +184,53 @@ func TestPeriodBounds_May(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// 2026-05-01 00:00:00 (本地时区 Asia/Shanghai UTC+8) = 1777593600 UTC
-	// 2026-06-01 00:00:00 (本地) = 1780272000 UTC
-	if start != 1777593600 {
-		t.Errorf("start expected 1777593600, got %d", start)
+	loc, _ := time.LoadLocation("Asia/Shanghai")
+	wantStart := time.Date(2026, 5, 1, 0, 0, 0, 0, loc).Unix()
+	wantEnd := time.Date(2026, 6, 1, 0, 0, 0, 0, loc).Unix()
+	if start != wantStart {
+		t.Errorf("start expected %d, got %d", wantStart, start)
 	}
-	if end != 1780272000 {
-		t.Errorf("end expected 1780272000, got %d", end)
+	if end != wantEnd {
+		t.Errorf("end expected %d, got %d", wantEnd, end)
 	}
 	// 验证差 1 月 ≈ 2678400 秒 (30 天)
 	if end-start != 2678400 {
 		t.Errorf("end-start expected 2678400, got %d", end-start)
+	}
+}
+
+func TestBuildPeriodLabel(t *testing.T) {
+	loc, _ := time.LoadLocation("Asia/Shanghai")
+	tests := []struct {
+		name       string
+		start, end time.Time
+		want       string
+	}{
+		{
+			name:  "完整自然月保持旧格式",
+			start: time.Date(2026, 6, 1, 0, 0, 0, 0, loc),
+			end:   time.Date(2026, 7, 1, 0, 0, 0, 0, loc),
+			want:  "2026-06",
+		},
+		{
+			name:  "月内任意区间显示边界",
+			start: time.Date(2026, 6, 15, 0, 0, 0, 0, loc),
+			end:   time.Date(2026, 6, 30, 0, 0, 0, 0, loc),
+			want:  "2026-06-15~2026-06-30",
+		},
+		{
+			name:  "跨年区间",
+			start: time.Date(2025, 12, 15, 0, 0, 0, 0, loc),
+			end:   time.Date(2026, 1, 15, 0, 0, 0, 0, loc),
+			want:  "2025-12-15~2026-01-15",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := buildPeriodLabel(tt.start.Unix(), tt.end.Unix()); got != tt.want {
+				t.Fatalf("buildPeriodLabel() = %q, want %q", got, tt.want)
+			}
+		})
 	}
 }
 
